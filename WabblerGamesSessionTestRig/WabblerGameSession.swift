@@ -223,6 +223,11 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
             completionHandler(nil, error)
         }
         newSession!.title = title
+        guard let player = WabblerGameSession.localPlayer else {
+            WabblerGameSession.stateError?(WabblerGameSessionError.localPlayerNotSignedIn)
+            return
+        }
+        newSession?.players = [player]
         
         CloudKitConnector.sharedConnector.save(record: newSession!.record) { (record, error) in
             var modSession = record != nil ? newSession : nil

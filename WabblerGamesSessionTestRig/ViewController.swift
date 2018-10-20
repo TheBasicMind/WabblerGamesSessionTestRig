@@ -32,7 +32,9 @@ class ViewController: UIViewController {
     
     @IBOutlet var manuallyJoinGameButton: UIButton?
     @IBOutlet var textView: UITextView?
-    var signedInPlayer: WabblerCloudPlayer?
+    var signedInPlayer: WabblerCloudPlayer? {
+        return WabblerGameSession.localPlayer
+    }
     var session: WabblerGameSession?
     var sessions: [WabblerGameSession]?
     var sessionsAndData: [WabblerGameSession:GameData] = [:]
@@ -58,7 +60,7 @@ class ViewController: UIViewController {
     @IBAction func getSignedInPlayer(_ sender: Any) {
         WabblerCloudPlayer.getCurrentSignedInPlayer() { [weak self] (cloudKitPlayer, error) in
             if let cloudKitPlayer = cloudKitPlayer {
-                self?.signedInPlayer = cloudKitPlayer
+                //self?.signedInPlayer = cloudKitPlayer
                 myDebugPrint("******** Got current signed in player")
                 myDebugPrint("             Player Name: \(cloudKitPlayer.displayName ?? "Null")")
                 myDebugPrint("             with player ID: \(cloudKitPlayer.playerID?.strHash() ?? "Null")")
@@ -260,12 +262,12 @@ class ViewController: UIViewController {
                 if let error = error as? WabblerGameSessionError {
                     self?.printError(error)
                 } else {
-                    tempSessions.remove(at: sessions.count - index - 1)
+                    _ = tempSessions.popLast()
                     myDebugPrint("******** Deleted session with id \(session.identifier)")
-                }
-                if index == sessions.count - 1 {
-                    self?.sessions = tempSessions
-                    self?.sessionsAndData.removeValue(forKey: session)
+                    if index == sessions.count - 1 {
+                        self?.sessions = tempSessions
+                        self?.sessionsAndData.removeValue(forKey: session)
+                    }
                 }
             }
         }
