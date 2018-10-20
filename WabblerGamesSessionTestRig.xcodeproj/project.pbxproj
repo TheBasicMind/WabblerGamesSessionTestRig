@@ -9,10 +9,14 @@
 /* Begin PBXBuildFile section */
 		09D2CA27217496A800AD11E2 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA26217496A800AD11E2 /* AppDelegate.swift */; };
 		09D2CA29217496A800AD11E2 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA28217496A800AD11E2 /* ViewController.swift */; };
-		09D2CA2C217496A800AD11E2 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 09D2CA2A217496A800AD11E2 /* Main.storyboard */; };
 		09D2CA2E217496AA00AD11E2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 09D2CA2D217496AA00AD11E2 /* Assets.xcassets */; };
 		09D2CA31217496AA00AD11E2 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 09D2CA2F217496AA00AD11E2 /* LaunchScreen.storyboard */; };
 		09D2CA3C217496AA00AD11E2 /* WabblerGamesSessionTestRigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA3B217496AA00AD11E2 /* WabblerGamesSessionTestRigTests.swift */; };
+		09D2CA472174A08E00AD11E2 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 09D2CA462174A08100AD11E2 /* Main.storyboard */; };
+		09D2CA492174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA482174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift */; };
+		09D2CA4C2174A19900AD11E2 /* WabblerGameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA4A2174A19900AD11E2 /* WabblerGameSession.swift */; };
+		09D2CA4D2174A19900AD11E2 /* CloudKitConnector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA4B2174A19900AD11E2 /* CloudKitConnector.swift */; };
+		09D2CA512176278700AD11E2 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09D2CA502176278700AD11E2 /* CloudKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -29,13 +33,18 @@
 		09D2CA23217496A800AD11E2 /* WabblerGamesSessionTestRig.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WabblerGamesSessionTestRig.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		09D2CA26217496A800AD11E2 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		09D2CA28217496A800AD11E2 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
-		09D2CA2B217496A800AD11E2 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		09D2CA2D217496AA00AD11E2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		09D2CA30217496AA00AD11E2 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		09D2CA32217496AA00AD11E2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		09D2CA37217496AA00AD11E2 /* WabblerGamesSessionTestRigTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WabblerGamesSessionTestRigTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		09D2CA3B217496AA00AD11E2 /* WabblerGamesSessionTestRigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WabblerGamesSessionTestRigTests.swift; sourceTree = "<group>"; };
 		09D2CA3D217496AA00AD11E2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		09D2CA462174A08100AD11E2 /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Main.storyboard; sourceTree = "<group>"; };
+		09D2CA482174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiscExtensionsFunctionsConstants.swift; sourceTree = "<group>"; };
+		09D2CA4A2174A19900AD11E2 /* WabblerGameSession.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WabblerGameSession.swift; sourceTree = "<group>"; };
+		09D2CA4B2174A19900AD11E2 /* CloudKitConnector.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CloudKitConnector.swift; sourceTree = "<group>"; };
+		09D2CA4E2176277D00AD11E2 /* WabblerGamesSessionTestRig.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WabblerGamesSessionTestRig.entitlements; sourceTree = "<group>"; };
+		09D2CA502176278700AD11E2 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,6 +52,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				09D2CA512176278700AD11E2 /* CloudKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -62,6 +72,7 @@
 				09D2CA25217496A800AD11E2 /* WabblerGamesSessionTestRig */,
 				09D2CA3A217496AA00AD11E2 /* WabblerGamesSessionTestRigTests */,
 				09D2CA24217496A800AD11E2 /* Products */,
+				09D2CA4F2176278700AD11E2 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -77,9 +88,13 @@
 		09D2CA25217496A800AD11E2 /* WabblerGamesSessionTestRig */ = {
 			isa = PBXGroup;
 			children = (
+				09D2CA4E2176277D00AD11E2 /* WabblerGamesSessionTestRig.entitlements */,
 				09D2CA26217496A800AD11E2 /* AppDelegate.swift */,
 				09D2CA28217496A800AD11E2 /* ViewController.swift */,
-				09D2CA2A217496A800AD11E2 /* Main.storyboard */,
+				09D2CA482174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift */,
+				09D2CA4B2174A19900AD11E2 /* CloudKitConnector.swift */,
+				09D2CA4A2174A19900AD11E2 /* WabblerGameSession.swift */,
+				09D2CA462174A08100AD11E2 /* Main.storyboard */,
 				09D2CA2D217496AA00AD11E2 /* Assets.xcassets */,
 				09D2CA2F217496AA00AD11E2 /* LaunchScreen.storyboard */,
 				09D2CA32217496AA00AD11E2 /* Info.plist */,
@@ -94,6 +109,14 @@
 				09D2CA3D217496AA00AD11E2 /* Info.plist */,
 			);
 			path = WabblerGamesSessionTestRigTests;
+			sourceTree = "<group>";
+		};
+		09D2CA4F2176278700AD11E2 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				09D2CA502176278700AD11E2 /* CloudKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -146,6 +169,17 @@
 				TargetAttributes = {
 					09D2CA22217496A800AD11E2 = {
 						CreatedOnToolsVersion = 10.0;
+						SystemCapabilities = {
+							com.apple.BackgroundModes = {
+								enabled = 1;
+							};
+							com.apple.Push = {
+								enabled = 1;
+							};
+							com.apple.iCloud = {
+								enabled = 1;
+							};
+						};
 					};
 					09D2CA36217496AA00AD11E2 = {
 						CreatedOnToolsVersion = 10.0;
@@ -177,9 +211,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				09D2CA472174A08E00AD11E2 /* Main.storyboard in Resources */,
 				09D2CA31217496AA00AD11E2 /* LaunchScreen.storyboard in Resources */,
 				09D2CA2E217496AA00AD11E2 /* Assets.xcassets in Resources */,
-				09D2CA2C217496A800AD11E2 /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -197,7 +231,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				09D2CA4D2174A19900AD11E2 /* CloudKitConnector.swift in Sources */,
+				09D2CA4C2174A19900AD11E2 /* WabblerGameSession.swift in Sources */,
 				09D2CA29217496A800AD11E2 /* ViewController.swift in Sources */,
+				09D2CA492174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift in Sources */,
 				09D2CA27217496A800AD11E2 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -221,14 +258,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
-		09D2CA2A217496A800AD11E2 /* Main.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				09D2CA2B217496A800AD11E2 /* Base */,
-			);
-			name = Main.storyboard;
-			sourceTree = "<group>";
-		};
 		09D2CA2F217496AA00AD11E2 /* LaunchScreen.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -360,9 +389,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = WabblerGamesSessionTestRig/WabblerGamesSessionTestRig.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = VWC6QT4FC9;
 				INFOPLIST_FILE = WabblerGamesSessionTestRig/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -378,9 +409,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = WabblerGamesSessionTestRig/WabblerGamesSessionTestRig.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = VWC6QT4FC9;
 				INFOPLIST_FILE = WabblerGamesSessionTestRig/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
