@@ -82,7 +82,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func listSessions(_ sender: Any) {
-        WabblerGameSession.loadPrivateSessions() {
+        WabblerGameSession.loadSessions() {
             [weak self] (retreivedSessions, error) in
             if let error = error as? WabblerGameSessionError {
                 self?.printError(error)
@@ -93,7 +93,7 @@ class ViewController: UIViewController {
             self?.sessions = retreivedSessions
             guard let retreivedSessions = retreivedSessions else { return }
             for gameSession in retreivedSessions {
-                var gameSession = gameSession
+                self?.logSession(gameSession)
                 gameSession.loadGameData()  {
                     [weak self] (gameData, error) in
                     if let error = error as? WabblerGameSessionError {
@@ -106,9 +106,38 @@ class ViewController: UIViewController {
                     }
                 }
             }
-            self?.session = retreivedSessions.last
         }
     }
+    
+//    func listSharedSessions() {
+//        WabblerGameSession.loadSharedSessions() {
+//            [weak self] (retreivedSessions, error) in
+//            if let error = error as? WabblerGameSessionError {
+//                self?.printError(error)
+//                return
+//            }
+//            myDebugPrint("******** Got sessions, count = \(retreivedSessions?.count ?? 0)")
+//
+//            if self?.sessions != nil,let retreivedSessions = retreivedSessions {
+//                self!.sessions! += retreivedSessions
+//                for gameSession in retreivedSessions {
+//                    self?.logSession(gameSession)
+//                    gameSession.loadGameData()  {
+//                        [weak self] (gameData, error) in
+//                        if let error = error as? WabblerGameSessionError {
+//                            self?.printError(error)
+//                        } else {
+//                            if let gameData = gameData {
+//                                myDebugPrint("    ******** Got data for session, \(gameData.someString)")
+//                                self?.sessionsAndData[gameSession] = gameData
+//                            }
+//                        }
+//                    }
+//                }
+//                self?.session = retreivedSessions.last
+//            }
+//        }
+//    }
     
     @IBAction func createSession(_ sender: Any) {
         guard CloudKitConnector.sharedConnector.assuredValues != nil else { return }
@@ -131,6 +160,10 @@ class ViewController: UIViewController {
             myDebugPrint("No session assigned to session property as yet.")
             return
         }
+        logSession(session)
+    }
+    
+    func logSession(_ session: WabblerGameSession) {
         myDebugPrint("--------------")
         myDebugPrint("Session Title: \(session.title)")
         myDebugPrint("Session owner: \(session.owner?.displayName ?? "Null"), id: \(session.owner?.playerID?.strHash() ?? "Null")")
@@ -149,7 +182,7 @@ class ViewController: UIViewController {
     }
     
     func saveData(contentString: String) {
-        guard var session = session else {
+        guard let session = session else {
             myDebugPrint("Error: Session must be set-up and cached before we can save data")
             return
         }
@@ -157,15 +190,11 @@ class ViewController: UIViewController {
         let myData = GameData(someString: contentString)
         session.saveGameData(myData) {
             [weak self] (data, error) in
-            if let error = error as? WabblerGameSessionError {
-                self?.printError(error)
+            if let error = error {
+                myDebugPrint(error.localizedDescription)
             } else {
-                if let data = data {
-                    myDebugPrint("Conflict: data already saved with someString: \(data.someString)")
-                } else {
-                    myDebugPrint("******** Saved data with someString: \(myData.someString)")
-                    self?.sessionsAndData[session] = myData
-                }
+                myDebugPrint("******** Saved data with someString: \(myData.someString)")
+                self?.sessionsAndData[session] = myData
             }
         }
     }

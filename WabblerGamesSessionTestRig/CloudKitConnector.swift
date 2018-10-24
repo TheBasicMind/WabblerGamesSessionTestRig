@@ -120,7 +120,7 @@ class CloudKitConnector: AssuredState {
     private var sharedDBChangeToken: CKServerChangeToken?
     var remoteRecordUpdatedCompletion: ((CKRecord?, CKRecord.ID?, Error?)->Void)?
     var remoteRecordDeletedCompletion: ((CKRecord.ID?, Error?)->Void)?
-
+    
     func connect(containerIdentifier: String?, zoneName:String) {
         var container: CKContainer
         if let containerIdentifier = containerIdentifier {
@@ -136,7 +136,7 @@ class CloudKitConnector: AssuredState {
             case .available:
                 self.failureStates.remove(.notSignedInToICloud)
                 self.privateDatabase = container.privateCloudDatabase
-                self.sharedDatabase = container.publicCloudDatabase
+                self.sharedDatabase = container.sharedCloudDatabase
                 self.failureStates.remove(.noPrivateDB)
                 self.failureStates.remove(.noSharedDB)
                 self.continueConnection(zoneName: zoneName)
@@ -154,7 +154,7 @@ class CloudKitConnector: AssuredState {
     /**
      By the time initialisation is finalised
      we should have
-    */
+     */
     private func continueConnection(zoneName: String) {
         let recordZone = CKRecordZone(zoneName: zoneName)
         privateDatabase?.fetch(withRecordZoneID: recordZone.zoneID) { (retreivedZone, error) in
@@ -177,6 +177,26 @@ class CloudKitConnector: AssuredState {
                 self.failureStates.remove(.noPrivateZone)
             }
         }
+        let recordZone2 = CKRecordZone(zoneName: zoneName)
+        //        sharedDatabase?.fetch(withRecordZoneID: recordZone2.zoneID) { (retreivedZone, error) in
+        //            if let error = error {
+        //                print(error)
+        //                print(error.localizedDescription)
+        //                let ckError = error as NSError
+        //                if ckError.code == CKError.zoneNotFound.rawValue {
+        //                    CloudKitConnector.sharedConnector.privateDatabase?.save(recordZone2) { (newZone, error) in
+        //                        if let error = error {
+        //                            print(error.localizedDescription)
+        //                        } else {
+        //                            CloudKitConnector.sharedConnector.sharedZone = newZone
+        //                        }
+        //                    }
+        //                }
+        //            } else {
+        //                CloudKitConnector.sharedConnector.sharedZone = retreivedZone
+        //                self.failureStates.remove(.noPrivateZone)
+        //            }
+        //        }
         
         // Setup private subscription if one hasn't been set up already
         if privateSubscription != nil { return }
@@ -225,7 +245,7 @@ class CloudKitConnector: AssuredState {
     /**
      Note if containerIdentifier is nil
      then the default container is used.
-    */
+     */
     func fetchUserRecord(containerIdentifier: String?, completion: @escaping (CKRecord?, Error?)->Void) {
         var container: CKContainer
         if let containerIdentifier = containerIdentifier {
@@ -250,7 +270,7 @@ class CloudKitConnector: AssuredState {
      Generally abstracted method for fetching
      all changed records of all types from all
      zones.
-    */
+     */
     func fetchRecords(database: CKDatabase, changeToken: CKServerChangeToken?, callback: @escaping ([CKRecord], Error?)->Void) {
         let changesOperation = CKFetchDatabaseChangesOperation(previousServerChangeToken: changeToken) // Nil simply fetches all zones
         changesOperation.fetchAllChanges = true
@@ -287,7 +307,7 @@ class CloudKitConnector: AssuredState {
      a given type. The callback will be called twice. Once for results
      from the privateDB and again with results from the publicDB
      */
-    func fetchRecords(database: CKDatabase, recordType: String, callback: @escaping ([CKRecord], Error?)->Void) {
+    func fetchPrivateRecords(recordType: String, callback: @escaping ([CKRecord], Error?)->Void) {
         guard let av = assuredValues else { return }
         let predicate = NSPredicate(value: true)
         let query = CKQuery(recordType: recordType, predicate: predicate)
@@ -303,18 +323,158 @@ class CloudKitConnector: AssuredState {
             cursor, error in
             callback(records, error)
         }
-        database.add(queryOp)
+        av.privateDatabase.add(queryOp)
     }
+    
+    /**
+     fetch records of record type accross both private
+     and shared databases.
+    */
+    func fetchRecords(recordType: String, callback: @escaping ([(CKRecord,CKDatabase.Scope)], Error?)->Void) {
+        guard assuredValues != nil else { return }
+        fetchPrivateRecords(recordType: recordType) { [weak self](records, error) in
+            var records:[(CKRecord,CKDatabase.Scope)] = records.map { ($0, .private) }
+            var errors: [Error] = error != nil ? [error!] : []
+            if let error = error {
+                callback(records,error)
+            } else if self?.sharedDatabase == nil {
+                callback(records,error)
+            } else if let sharedDatabase = self?.sharedDatabase {
+                sharedDatabase.fetchAllRecordZones() { (zones, error) in
+                    var ops: [CKQueryOperation] = []
+                    guard let zones = zones else {
+                        callback(records,error)
+                        return
+                    }
+                    for zone in zones {
+                        if let op = self?.fetchRecordsOperation(recordType: recordType, zoneID: zone.zoneID, callback: { (zoneRecords, error) in
+                            records += zoneRecords.map { ($0,.shared) }
+                            if let error = error { errors += [error] }
+                        }) {
+                            ops += [op]
+                        }
+                    }
+                    if let lastOp = ops.last {
+                        lastOp.completionBlock = {
+                            callback(records,errors.last)
+                        }
+                        for op in ops {
+                            if op != lastOp {
+                                lastOp.addDependency(op)
+                            }
+                        }
+                    }
+                    for op in ops {
+                        sharedDatabase.add(op)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func fetchRecordsOperation(recordType: String, zoneID: CKRecordZone.ID ,callback: @escaping ([CKRecord], Error?)->Void)->CKQueryOperation {
+        let predicate = NSPredicate(value: true)
+        let query = CKQuery(recordType: recordType, predicate: predicate)
+        var records = [CKRecord]()
+        let queryOp = CKQueryOperation(query: query)
+        queryOp.zoneID = zoneID
+        queryOp.recordFetchedBlock = {
+            ckRecord in
+            // Do we get here
+            records += [ckRecord]
+        }
+        queryOp.queryCompletionBlock = {
+            cursor, error in
+            callback(records, error)
+        }
+        return queryOp
+    }
+    
+//    func getSharedRecords(callback: @escaping (([String: NSNumber]) -> Void)) {
+//        var sharedData = [String: NSNumber]()
+//        guard isCloudKitEnabeld else {
+//            callback(sharedData)
+//            return
+//        }
+//
+//        sharedDatabase.fetchAllRecordZones { zones, error in
+//            if let err = error {
+//                print("Error fetting shared record zones: \(err)")
+//                callback(sharedData)
+//                return
+//            }
+//            guard let recordZones = zones else {
+//                print("no error getting shared zones, but no zones returned")
+//                callback(sharedData)
+//                return
+//            }
+//            if recordZones.isEmpty {
+//                callback(sharedData)
+//                return
+//            }
+//            var zoneQueriesReturned = 0
+//            for zone in recordZones {
+//                let query = CKQuery(recordType: CloudKitAccessor.kRecordType, predicate: NSPredicate(value: true))
+//                let queryOperation = CKQueryOperation(query: query)
+//                queryOperation.zoneID = zone.zoneID
+//                queryOperation.qualityOfService = .userInteractive
+//                queryOperation.queuePriority = .high
+//                queryOperation.recordFetchedBlock = { record in
+//                    guard let count = record[CloudKitAccessor.kCountKey] as? NSNumber else {
+//                        print("Malformed shared record, skipping: \(record)")
+//                        return
+//                    }
+//                    let recordNameID = record.recordID.zoneID.ownerName
+//                    let name = SharedUserStore.getSharedUserDisplayName(nameID: recordNameID) ?? record.recordID.zoneID.ownerName
+//                    sharedData[name] = count
+//                }
+//                queryOperation.queryCompletionBlock = { cursor, error in
+//                    if let err = error {
+//                        print("Error running shared query: \(err)")
+//                    }
+//                }
+//                queryOperation.completionBlock = {
+//                    zoneQueriesReturned += 1
+//                    if zoneQueriesReturned == recordZones.count {
+//                        callback(sharedData)
+//                    }
+//                }
+//                self.sharedDatabase.add(queryOperation)
+//            }
+//        }
+//    }
 
-    func save(record: CKRecord, completion:((CKRecord?, Error?)->Void)?) {
-        modify(record: record, recordID: nil, saveCompletion: completion, deleteCompletion: nil)
+    /**
+     A method for saving a single CKRecord.
+     - parameter record: The record we attempted to save
+     - parameter completion: The completion handler for once the record has saved. Returns an error if the record is not saved.
+        -  record: The record we attempted to save
+        -  error: If there was an error saving it is returned here
+    */
+    func save(record: CKRecord, scope: CKDatabase.Scope, completion:((CKRecord?, Error?)->Void)?) {
+        modify(record: record, recordID: nil, scope: scope, saveCompletion: completion, deleteCompletion: nil)
     }
     
     func delete(recordID: CKRecord.ID, completion:((CKRecord.ID?, Error?)->Void)?) {
-        modify(record: nil, recordID: recordID, saveCompletion: nil, deleteCompletion: completion)
+        modify(record: nil, recordID: recordID, scope:.private ,saveCompletion: nil, deleteCompletion: completion)
     }
 
-    func modify(record: CKRecord?, recordID: CKRecord.ID?, saveCompletion:((CKRecord?, Error?)->Void)?, deleteCompletion: ((CKRecord.ID?, Error?)->Void)?) {
+    /**
+     Modify a single cloud kit record.
+     If modifying a record, supply record and save a completion handler
+     If deleting a record, supply a record and delete completion handler.
+     
+     If there is an error modifying the record, the save completion handler will return
+     the original record we attempted to save. Do not immediately exexute a query for the
+     saved record in the save completion block because server indexing of the records
+     will probably not have completed and the record may not be found.
+     
+     - parameter saveCompletion: The completion handler for once the record has saved. Returns an error if the record is not saved.
+     -  record1: The record we attempted to save
+     -  record2: The record as saved to the server
+     -  error: If there was an error saving it is returned here
+    */
+    func modify(record: CKRecord?, recordID: CKRecord.ID?, scope: CKDatabase.Scope, saveCompletion:((CKRecord?, Error?)->Void)?, deleteCompletion: ((CKRecord.ID?, Error?)->Void)?) {
         guard let av = assuredValues else { return }
         var recordsToSave: [CKRecord]? = nil
         var recordsToDelete: [CKRecord.ID]? = nil
@@ -328,21 +488,15 @@ class CloudKitConnector: AssuredState {
         let configuration = CKOperation.Configuration()
         configuration.qualityOfService = .userInitiated
         modOp.configuration = configuration
-        
-        var savedRecord: CKRecord? = nil
-        var savingError: Error? = nil
 
         modOp.perRecordCompletionBlock = {
             record, error in
-            savedRecord = record
-            savingError = error
+            saveCompletion?(record,error)
+            modOp.modifyRecordsCompletionBlock = nil
         }
         
         modOp.modifyRecordsCompletionBlock = {
             records, recordIDs, error in
-            
-            print(savedRecord ?? "Modify record is nil")
-            print(savingError ?? "Modify error is nil")
             
             if let ckError = error as? CKError {
                 let userInf = ckError.userInfo
@@ -356,15 +510,18 @@ class CloudKitConnector: AssuredState {
                     deleteCompletion?(recordID,saveError)
                 } else {
                     if let saveCompletion = saveCompletion {
-                        saveCompletion(nil, WabblerGameSessionError.unknownError)
+                        saveCompletion(record, WabblerGameSessionError.unknownError)
                     }
                     if let deleteCompletion = deleteCompletion {
-                        deleteCompletion(nil, WabblerGameSessionError.unknownError)
+                        deleteCompletion(recordID, WabblerGameSessionError.unknownError)
                     }
                 }
             } else {
                 if let saveCompletion = saveCompletion {
-                    saveCompletion(savedRecord, nil)
+                    // Even though no error, still an unknown error has occured because
+                    // otherwise we would have nulified this completion block in the previous
+                    // block
+                    saveCompletion(record,  WabblerGameSessionError.unknownError)
                 }
                 if let deleteCompletion = deleteCompletion {
                     if let recordID = recordIDs?.first {
@@ -373,7 +530,15 @@ class CloudKitConnector: AssuredState {
                 }
             }
         }
-        av.privateDatabase.add(modOp)
+        
+        switch scope {
+        case .private:
+            av.privateDatabase.add(modOp)
+        case .shared:
+            sharedDatabase?.add(modOp)
+        default:
+            print("Wrong db scope")
+        }
     }
     
     func loadRecord(_ recordID: CKRecord.ID, scope: CKDatabase.Scope, completion:((CKRecord?, Error?)->Void)?) {
@@ -401,7 +566,9 @@ class CloudKitConnector: AssuredState {
             let saveOperation = CKModifyRecordsOperation(recordsToSave: [record, share], recordIDsToDelete: nil)
             saveOperation.modifyRecordsCompletionBlock = {
                 records, recordIDs, error in
-                preparationCompletionHandler(share, CKContainer.default(), error)
+                if error == nil {
+                    preparationCompletionHandler(share, CKContainer.default(), error)
+                }
             }
             av.privateDatabase.add(saveOperation)
         }
@@ -426,16 +593,6 @@ class CloudKitConnector: AssuredState {
         }
     }
     
-    func application(_ application: UIApplication, userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata) {
-        let acceptOp = CKAcceptSharesOperation(shareMetadatas: [cloudKitShareMetadata])
-        acceptOp.perShareCompletionBlock = {
-            metadata, share, error in
-            
-        }
-        CKContainer(identifier: cloudKitShareMetadata.containerIdentifier).add(acceptOp)
-    }
-
-    
     func remoteRecordDeleted(_ recordID: CKRecord.ID, scope: CKDatabase.Scope) {
         remoteRecordDeletedCompletion?(recordID, nil)
     }
@@ -444,6 +601,8 @@ class CloudKitConnector: AssuredState {
         let accept = CKAcceptSharesOperation(shareMetadatas: [shareMetaData])
         accept.perShareCompletionBlock = {
             metaData, share, error in
+            
         }
+        CKContainer(identifier: shareMetaData.containerIdentifier).add(accept)
     }
 }

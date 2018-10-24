@@ -22,6 +22,8 @@ enum WabblerGameSessionError: Error {
     case noCloudKitConnection
     case localPlayerNotSignedIn
     case unknownError
+    case gameDataCouldNotBeEncoded
+    case serverGameDataCouldNotBeDecoded
 }
 
 struct WabblerSessionFailureSet: OptionSet, Hashable {
@@ -74,7 +76,7 @@ protocol WabblerGameSessionEventListener {
     func session(_ session: WabblerGameSession, player: WabblerCloudPlayer, didSave data: Data)
 }
 
-struct WabblerGameSession: Hashable, WabblerAssuredState {
+class WabblerGameSession: WabblerAssuredState {
     var isAssured: Bool {
         let connectorInitialised = CloudKitConnector.sharedConnector.failureStates.isEmpty
         if WabblerGameSession.localPlayer != nil, connectorInitialised {
@@ -98,8 +100,15 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
     fileprivate static let recordType = "WabblerGameSession"
     fileprivate static let keys = (identifier : "name", lastModifiedDate : "lastModifiedDate", players: "players", title : "title", cachedData: "cachedData")
     private static var eventListenerDelegate: WabblerGameSessionEventListener?
-    private var record : CKRecord
-    var owner: WabblerCloudPlayer?
+    private var record : CKRecord //
+    let scope: CKDatabase.Scope
+    var owner: WabblerCloudPlayer? {
+        if players.count > 0 {
+            return players[0]
+        } else {
+            return nil
+        }
+    }
     var opponent: WabblerCloudPlayer?
     
     var identifier : String {
@@ -123,11 +132,12 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
     var players: [WabblerCloudPlayer] {
         get {
             let players: [WabblerCloudPlayer]
-            if let data = self.record[WabblerGameSession.keys.players] as? Data {
+            if let data = self.record[WabblerGameSession.keys.players] as? NSData {
                 let decoder = JSONDecoder()
                 do {
-                    players = try decoder.decodeApiVersion(Array<WabblerCloudPlayer>.self, from: data)
+                    players = try decoder.decode(Array<WabblerCloudPlayer>.self, from: data as Data)
                 } catch {
+                    print(error.localizedDescription)
                     players = []
                 }
             } else {
@@ -143,7 +153,7 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
             } catch {
                 return
             }
-            record[WabblerGameSession.keys.players] = NSData(data: data)
+            record[WabblerGameSession.keys.players] = data as NSData
         }
     }
     
@@ -156,19 +166,21 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
         }
     }
     
-    private init() throws {
+    private init(scope: CKDatabase.Scope) throws {
         let recordZone = CKRecordZone(zoneName: WabblerGameSessionStrings.gamesZoneName)
         let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: recordZone.zoneID)
         let myRecord = CKRecord(recordType: WabblerGameSession.recordType, recordID:recordID)
+        self.scope = scope
         self.record = myRecord
-        self.title = ""
         guard let player = WabblerGameSession.localPlayer else {
             throw WabblerGameSessionError.localPlayerNotSignedIn
         }
         self.players = [player]
+        self.title = ""
     }
     
-    private init(record : CKRecord) {
+    private init(record : CKRecord, scope: CKDatabase.Scope) {
+        self.scope = scope
         self.record = record
     }
     
@@ -218,7 +230,7 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
     static func createSession(withTitle title: String, completionHandler: @escaping (WabblerGameSession?, Error?) -> Void) {
         var newSession: WabblerGameSession?
         do {
-            newSession = try WabblerGameSession()
+            newSession = try WabblerGameSession(scope:.private)
         } catch {
             completionHandler(nil, error)
         }
@@ -229,8 +241,8 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
         }
         newSession?.players = [player]
         
-        CloudKitConnector.sharedConnector.save(record: newSession!.record) { (record, error) in
-            var modSession = record != nil ? newSession : nil
+        CloudKitConnector.sharedConnector.save(record: newSession!.record, scope: .private) { (record, error) in
+            let modSession = record != nil ? newSession : nil
             if let record = record {
                 modSession?.record = record
             }
@@ -240,29 +252,122 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
         }
     }
     
-    mutating func save(_ data: Data, completionHandler:((Data?, Error?) -> Void)?) {
-        record[WabblerGameSession.keys.cachedData] = data
+    /**
+     Save data to the session record.
+     The completion handler returns the data we attempted to save
+     or an error. This method is kept private because for efficiency
+     the completion handler does not return on the main thread.
+     - parameter data: The data we are saving to the record.
+     - parameter completionHandler: A completion handler closure.
+        - data: The data now saved on the server
+        - error: A passthrough CloudKit error object if an error was raised.
+    */
+    ///TODO: Retry after seconds
+    private func save(_ data: Data, completionHandler:((Data?, Error?) -> Void)?) {
+        let modifiedRecord = record.copy() as! CKRecord // We make a copy and avoid modifying this session un
+        modifiedRecord[WabblerGameSession.keys.cachedData] = data
         
-        CloudKitConnector.sharedConnector.save(record: record) { (savedRecord, error) in
-            DispatchQueue.main.async {
-                if let error = error {
-                    completionHandler?(savedRecord?[WabblerGameSession.keys.cachedData] as? Data, error)
-                } else {
-                    completionHandler?(savedRecord?[WabblerGameSession.keys.cachedData] as? Data, error)
+        CloudKitConnector.sharedConnector.save(record: modifiedRecord, scope: scope) { (savedRecord, error) in
+            var dataToBeReturned: Data? = nil
+            if let savedRecord = savedRecord {
+                self.record = savedRecord
+            }
+            // If there is an error we extract
+            // the data as saved on the server
+            if let ckError = error as? CKError {
+                switch ckError.code {
+                default:
+                    if let updatedRecord = ckError.serverRecord {
+                        self.record = updatedRecord
+                        dataToBeReturned = updatedRecord[WabblerGameSession.keys.cachedData] as? Data
+                        completionHandler?(dataToBeReturned, error)
+                        return
+                    }
                 }
+            }
+            if let error = error {
+                // Some other error we weren't expecting
+                // to return data will break the API so
+                // we return nil
+                completionHandler?(nil,error)
+                return
+            }
+            completionHandler?(data, error)
+        }
+    }
+    
+    /**
+     Version and save game data to the session record.
+     The completion handler returns the data we attempted to save
+     or an error.
+     - parameter data: The data we are saving to the record.
+     - parameter completionHandler: A completion handler closure.
+     - gameData: The game data now stored on the server after this save call has been made
+     - error: The error object if an error was raised.
+     */
+    func saveGameData(_ gameData: GameData, completionHandler: @escaping (GameData?, Error?) -> Void) {
+        let encoder = JSONEncoder()
+        let data: Data
+        do {
+            data = try encoder.encodeApiVersion(gameData)
+        } catch {
+            myDebugPrint("error saving API data")
+            completionHandler(gameData, WabblerGameSessionError.gameDataCouldNotBeEncoded)
+            return
+        }
+        
+        save(data) { (savedData, error) in
+            var gameData: GameData? = nil
+            let decoder = JSONDecoder()
+            
+            if savedData != nil {
+                do {
+                    gameData = try decoder.decodeApiVersion(GameData.self, from: savedData!)
+                } catch {
+                    myDebugPrint("******** Error decoding data saved by other player.")
+                    DispatchQueue.main.async {
+                        completionHandler(gameData, WabblerGameSessionError.serverGameDataCouldNotBeDecoded)
+                    }
+                    return
+                }
+            }
+            DispatchQueue.main.async {
+                completionHandler(gameData, error)
             }
         }
     }
     
-    mutating func loadData(completion: ((Data?, Error?) -> Void)? ) {
-        var scope: CKDatabase.Scope = .private
-
-        if record.share != nil {
-            scope = .shared
-        }
+    func loadData(completion: ((Data?, Error?) -> Void)? ) {
         CloudKitConnector.sharedConnector.loadRecord(record.recordID, scope: scope) {
             record, error in
-            
+            var data: Data? = nil
+            if let record = record {
+                self.record = record
+            }
+            data = record?[WabblerGameSession.keys.cachedData] as? Data
+            DispatchQueue.main.async {
+                completion?(data, error)
+            }
+        }
+    }
+    
+    func loadGameData(completionHandler: @escaping (GameData?, Error?) -> Void) {
+        loadData { (data, anError) in
+            var anError = anError
+            let decoder = JSONDecoder()
+            var gameData: GameData? = nil
+            if let data = data {
+                do {
+                    gameData = try decoder.decodeApiVersion(GameData.self, from: data)
+                } catch {
+                    myDebugPrint("Error: Could not decode gamedata when loading data")
+                    anError = WabblerGameSessionError.serverGameDataCouldNotBeDecoded
+                    return
+                }
+            }
+            DispatchQueue.main.async {
+                completionHandler(gameData, anError)
+            }
         }
     }
     
@@ -276,7 +381,7 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
     }
     
     static func loadSharedSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
-        guard let av = CloudKitConnector.sharedConnector.assuredValues else { return }
+        guard CloudKitConnector.sharedConnector.assuredValues != nil else { return }
         guard let sharedDB = CloudKitConnector.sharedConnector.sharedDatabase else { return }
         WabblerGameSession.loadSessions(database: sharedDB, completionHandler: completionHandler)
     }
@@ -286,7 +391,21 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
         CloudKitConnector.sharedConnector.fetchRecords(database: database, recordType: WabblerGameSession.recordType) {
             ckRecords, error in
             for record in ckRecords {
-                sessions += [WabblerGameSession(record: record)]
+                sessions += [WabblerGameSession(record: record, scope: database.databaseScope)]
+            }
+            DispatchQueue.main.async {
+                completionHandler(sessions, error)
+            }
+        }
+    }
+    
+    static func loadSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
+        guard CloudKitConnector.sharedConnector.assuredValues != nil else { return }
+        var sessions = [WabblerGameSession]()
+        CloudKitConnector.sharedConnector.fetchRecords(recordType: WabblerGameSession.recordType) {
+            ckRecords, error in
+            for record in ckRecords {
+                sessions += [WabblerGameSession(record: record.0, scope: record.1)]
             }
             DispatchQueue.main.async {
                 completionHandler(sessions, error)
@@ -304,5 +423,12 @@ struct WabblerGameSession: Hashable, WabblerAssuredState {
     
     func shareSession()->UICloudSharingController? {
         return CloudKitConnector.sharedConnector.shareRecord(record)
+    }
+}
+
+extension WabblerGameSession: Hashable {
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(record)
+        hasher.combine(players)
     }
 }

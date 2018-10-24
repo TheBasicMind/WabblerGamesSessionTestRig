@@ -102,7 +102,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         myDebugPrint("[] applicationWillTerminate")
     }
     
-    private func application(_ application: UIApplication, userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata) {
+    func application(_ application: UIApplication, userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata) {
         CloudKitConnector.sharedConnector.acceptShare(shareMetaData: cloudKitShareMetadata)
     }
 
