@@ -92,6 +92,7 @@ class ViewController: UIViewController {
             
             self?.sessions = retreivedSessions
             guard let retreivedSessions = retreivedSessions else { return }
+            self?.session = retreivedSessions.first
             for gameSession in retreivedSessions {
                 self?.logSession(gameSession)
                 gameSession.loadGameData()  {
@@ -146,7 +147,7 @@ class ViewController: UIViewController {
             if let error = error as? WabblerGameSessionError {
                 self?.printError(error)
             } else {
-                guard gameSession!.isAssured else { return } // Will call error if not assured
+                guard WabblerGameSession.isAssured else { return } // Will call error if not assured
                 myDebugPrint("******** Created session: \(gameSession?.title ?? "No title defined")")
                 myDebugPrint("    ******** Session owner: \(gameSession?.owner?.displayName ?? "Null")")
                 myDebugPrint("    ******** Session owner ID: \(gameSession?.owner?.playerID?.strHash() ?? "Null")")
@@ -242,15 +243,6 @@ class ViewController: UIViewController {
         }
     }
     
-    private func inviteOpponent(withSharingURL url: URL) {
-        guard MFMessageComposeViewController.canSendText() else { return }
-        let composeVC = MFMessageComposeViewController()
-        composeVC.messageComposeDelegate = self
-        let bodyText = NSLocalizedString("Hey, would you like to join me for a game? ", comment: "")
-        composeVC.body = bodyText + "\(url)"
-        self.present(composeVC, animated: true, completion: nil)
-    }
-    
     @IBAction func loadDataForSession(_ sender: Any) {
         session?.loadGameData  {
             [weak self] (gameData, error) in
@@ -304,9 +296,9 @@ class ViewController: UIViewController {
     }
     
     @IBAction func manuallyJoin(_ sender: Any) {
-        if let delegate = UIApplication.shared.delegate as? AppDelegate {
-            delegate.joinGame()
-        }
+//        if let delegate = UIApplication.shared.delegate as? AppDelegate {
+//            //delegate.joinGame()
+//        }
     }
     
     @IBAction func messageOpponent(_ sender: Any) {

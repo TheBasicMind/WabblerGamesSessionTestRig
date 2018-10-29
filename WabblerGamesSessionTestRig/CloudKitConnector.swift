@@ -34,9 +34,8 @@ struct FailureSet: OptionSet {
     static let noPrivateDBSub               = FailureSet(rawValue: 1 << 1)
     static let noSharedDBSub                = FailureSet(rawValue: 1 << 2)
     static let noPrivateZone                = FailureSet(rawValue: 1 << 3)
-    static let noSharedZone                 = FailureSet(rawValue: 1 << 4)
-    static let noPrivateDB                  = FailureSet(rawValue: 1 << 5)
-    static let noSharedDB                   = FailureSet(rawValue: 1 << 6)
+    static let noPrivateDB                  = FailureSet(rawValue: 1 << 4)
+    static let noSharedDB                   = FailureSet(rawValue: 1 << 5)
 }
 
 protocol Assurable {
@@ -48,12 +47,14 @@ struct AssuredValues {
     let privateSubscription: CKSubscription
     let privateDatabase: CKDatabase
     let privateZone: CKRecordZone
+    let sharedDatabase: CKDatabase
 }
 
 protocol OptionalValues: Assurable {
     var container: CKContainer? { get set }
     var privateSubscription: CKSubscription? { get set }
     var privateDatabase: CKDatabase? { get set }
+    var sharedDatabase: CKDatabase? { get set }
     var privateZone: CKRecordZone? { get set }
 }
 
@@ -62,8 +63,9 @@ extension OptionalValues {
         if let c = container,
         let ps = privateSubscription,
         let pd = privateDatabase,
-        let pz = privateZone {
-            return AssuredValues(container: c, privateSubscription: ps, privateDatabase: pd, privateZone: pz)
+        let pz = privateZone,
+        let sd = sharedDatabase {
+            return AssuredValues(container: c, privateSubscription: ps, privateDatabase: pd, privateZone: pz, sharedDatabase: sd)
         } else {
             return nil
         }
@@ -106,7 +108,7 @@ class CloudKitConnector: AssuredState {
     static let sharedConnector = CloudKitConnector()
     private init() { }
     var stateError: ((CloudKitConnectorError)->Void)?
-    var failureStates: FailureSet = [.notSignedInToICloud,.noPrivateDBSub,.noSharedDBSub,.noPrivateZone,.noSharedZone]
+    var failureStates: FailureSet = [.notSignedInToICloud,.noPrivateDBSub,.noSharedDBSub,.noPrivateZone,.noPrivateDB,.noSharedDB]
     // Assured properties
     var container: CKContainer?
     var privateSubscription: CKSubscription?
@@ -114,10 +116,18 @@ class CloudKitConnector: AssuredState {
     var privateDatabase: CKDatabase?
     var sharedDatabase: CKDatabase?
     var privateZone: CKRecordZone?
-    var sharedZone: CKRecordZone?
+    var sharedZones: [CKRecordZone]?
     // End Assured properties
-    private var privateDBChangeToken: CKServerChangeToken?
-    private var sharedDBChangeToken: CKServerChangeToken?
+    private var privateDBChangeToken: CKServerChangeToken? {
+        didSet {
+            print("private db change token: \(privateDBChangeToken?.description ?? "Nil")")
+        }
+    }
+    private var sharedDBChangeToken: CKServerChangeToken? {
+        didSet {
+            print("shared db change token: \(sharedDBChangeToken?.description ?? "Nil")")
+        }
+    }
     var remoteRecordUpdatedCompletion: ((CKRecord?, CKRecord.ID?, Error?)->Void)?
     var remoteRecordDeletedCompletion: ((CKRecord.ID?, Error?)->Void)?
     
@@ -177,70 +187,62 @@ class CloudKitConnector: AssuredState {
                 self.failureStates.remove(.noPrivateZone)
             }
         }
-        let recordZone2 = CKRecordZone(zoneName: zoneName)
-        //        sharedDatabase?.fetch(withRecordZoneID: recordZone2.zoneID) { (retreivedZone, error) in
-        //            if let error = error {
-        //                print(error)
-        //                print(error.localizedDescription)
-        //                let ckError = error as NSError
-        //                if ckError.code == CKError.zoneNotFound.rawValue {
-        //                    CloudKitConnector.sharedConnector.privateDatabase?.save(recordZone2) { (newZone, error) in
-        //                        if let error = error {
-        //                            print(error.localizedDescription)
-        //                        } else {
-        //                            CloudKitConnector.sharedConnector.sharedZone = newZone
-        //                        }
-        //                    }
-        //                }
-        //            } else {
-        //                CloudKitConnector.sharedConnector.sharedZone = retreivedZone
-        //                self.failureStates.remove(.noPrivateZone)
-        //            }
-        //        }
         
         // Setup private subscription if one hasn't been set up already
         if privateSubscription != nil { return }
-        let newPrivateSub = CKDatabaseSubscription(subscriptionID: CloudKitConnectorStrings.privateSubName)
-        let privateNotificationInfo = CKSubscription.NotificationInfo()
-        privateNotificationInfo.shouldSendContentAvailable = true
-        newPrivateSub.notificationInfo = privateNotificationInfo
-        let operation1 = CKModifySubscriptionsOperation(subscriptionsToSave: [newPrivateSub], subscriptionIDsToDelete: [])
-        operation1.modifySubscriptionsCompletionBlock = { [weak self] (subscriptions, strings, error) in
+        let privateOp = createDatabaseSubscriptionOperation(subscriptionId: CloudKitConnectorStrings.privateSubName)
+        privateOp.modifySubscriptionsCompletionBlock = { [weak self] (subscriptions, strings, error) in
             if error == nil {
                 if let sub = subscriptions?.first {
                     self?.privateSubscription = sub
                     self?.failureStates.remove(.noPrivateDBSub)
-                    print(sub)
+                    print("Subscription created: \(sub)")
                 }
             } else {
                 print(error!)
             }
         }
-        let configuration = CKOperation.Configuration()
-        configuration.isLongLived = true
-        configuration.qualityOfService = .utility
-        operation1.configuration = configuration
-        privateDatabase?.add(operation1)
+        privateDatabase?.add(privateOp)
+        
+        sharedDatabase?.fetchAllRecordZones { (retreivedZones, error) in
+            if let error = error {
+                print(error)
+                print(error.localizedDescription)
+            } else {
+                CloudKitConnector.sharedConnector.sharedZones = retreivedZones
+            }
+        }
         
         if sharedSubscription != nil { return }
-        let newSharedSub = CKDatabaseSubscription(subscriptionID: CloudKitConnectorStrings.sharedSubName)
-        let sharedNotificationInfo = CKSubscription.NotificationInfo()
-        sharedNotificationInfo.shouldSendContentAvailable = true
-        newSharedSub.notificationInfo = sharedNotificationInfo
-        let operation2 = CKModifySubscriptionsOperation(subscriptionsToSave: [newSharedSub], subscriptionIDsToDelete: [])
-        operation2.modifySubscriptionsCompletionBlock = { [weak self] (subscriptions, strings, error) in
+        let sharedOp = createDatabaseSubscriptionOperation(subscriptionId: CloudKitConnectorStrings.sharedSubName)
+        sharedOp.modifySubscriptionsCompletionBlock = { [weak self] (subscriptions, strings, error) in
             if error == nil {
                 if let sub = subscriptions?.first {
                     self?.sharedSubscription = sub
-                    print(sub)
+                    self?.failureStates.remove(.noSharedDBSub)
+                    print("Subscription created: \(sub)")
                 }
             } else {
                 print(error!)
             }
         }
-        operation2.configuration = configuration
-        sharedDatabase?.add(operation2)
+        sharedDatabase?.add(sharedOp)
     }
+    
+    private func createDatabaseSubscriptionOperation(subscriptionId: String) -> CKModifySubscriptionsOperation {
+        let subscription = CKDatabaseSubscription(subscriptionID: subscriptionId)
+        
+        //let notificationInfo = CKSubscription.NotificationInfo()
+        //notificationInfo.shouldSendContentAvailable = true
+        //subscription.notificationInfo = notificationInfo
+        subscription.recordType = "WabblerGameSession"
+        
+        let operation = CKModifySubscriptionsOperation(subscriptionsToSave: [subscription], subscriptionIDsToDelete: [])
+        operation.qualityOfService = .utility
+        
+        return operation
+    }
+
     
     /**
      Note if containerIdentifier is nil
@@ -267,39 +269,179 @@ class CloudKitConnector: AssuredState {
     }
     
     /**
-     Generally abstracted method for fetching
-     all changed records of all types from all
-     zones.
+     fetch all records accross both private
+     and shared databases. Only updates that
+     are a delta from the point this request
+     is made will be received after this
+     request is made.
      */
-    func fetchRecords(database: CKDatabase, changeToken: CKServerChangeToken?, callback: @escaping ([CKRecord], Error?)->Void) {
+    func fetchRecords(allRecords: @escaping ([(CKRecord,CKDatabase.Scope)], Error?)->Void) {
+        guard let av = assuredValues else { return }
+        fetchChanges(database: av.privateDatabase,changeToken: nil) { [weak self](records, deletions, error) in
+            var zippedRecords:[(CKRecord,CKDatabase.Scope)] = records.map { ($0.0, .private) }
+            if let error = error {
+                allRecords(zippedRecords,error)
+            } else {
+                self?.fetchChanges(database: av.sharedDatabase, changeToken: nil) { (records, deletions, error) in
+                    zippedRecords += records.map { ($0.0, .shared) }
+                    allRecords(zippedRecords,error)
+                }
+            }
+        }
+    }
+    
+    /**
+     Fetch changes since the last request
+     
+    */
+    func fetchLatestChanges(databaseScope: CKDatabase.Scope, allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
+        var changeToken: CKServerChangeToken? = nil
+        switch databaseScope {
+        case .private:
+            changeToken = privateDBChangeToken
+        case .shared:
+            changeToken = sharedDBChangeToken
+        default:
+            return
+        }
+        fetchChanges(databaseScope: databaseScope, changeToken: changeToken, allChanges: allChanges)
+    }
+    
+    /**
+     Fetch changes since supplied change token
+     or all changes if no change token is supplied
+     */
+    func fetchChanges(databaseScope: CKDatabase.Scope, changeToken: CKServerChangeToken?, allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
+        guard let av = assuredValues else { return }
+        let database: CKDatabase
+        switch databaseScope {
+        case .private:
+            database = av.privateDatabase
+        case .shared:
+            database = av.sharedDatabase
+        default:
+            return
+        }
+        
+        fetchChanges(database: database, changeToken: changeToken, allChanges: allChanges)
+    }
+
+    
+    /**
+     Generally abstracted method for fetching
+     all changed records from a database. If
+     nil is passed for the change token, fetches
+     all records.
+     */
+    private func fetchChanges(database: CKDatabase, changeToken: CKServerChangeToken?, allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
+        
         let changesOperation = CKFetchDatabaseChangesOperation(previousServerChangeToken: changeToken) // Nil simply fetches all zones
         changesOperation.fetchAllChanges = true
+        changesOperation.qualityOfService = .userInitiated
         var changedZones = [CKRecordZone.ID]()
         changesOperation.recordZoneWithIDChangedBlock = { rzid in
+            // This is the information for the zones that
+            // have changed records (note it doesn't justify
+            // a database change token udate yet)
             changedZones += [rzid]
         }
         
+        changesOperation.recordZoneWithIDWasDeletedBlock = { rzid in
+            // Deal with zone deletion. Since we are dealing
+            // with these on the local client, we need a new
+            // server change token once we are finished - which
+            // is given in the next block.
+            
+        }
+        
+        changesOperation.changeTokenUpdatedBlock = { [weak self] newToken in
+            // This is the new database change token
+            // for the database after zone deletions have
+            // been processed.
+            switch database.databaseScope {
+            case .private:
+                self?.privateDBChangeToken = newToken
+            case .shared:
+                self?.sharedDBChangeToken = newToken
+            default:
+                // Do nothing
+                break
+            }
+        }
         // must update changeTokenUpdatedBlock
         // because single operation may result in
         // multiple
         changesOperation.fetchDatabaseChangesCompletionBlock = {
             [weak self] newToken, more, error in
-            self?.sharedDBChangeToken = newToken
-            self?.fetchZoneChanges(zones: changedZones, allRecords: callback) // using CKFetchRecordZoneChangesOperation
+            if changedZones.count == 0 {
+                switch database.databaseScope {
+                case .private:
+                    self?.privateDBChangeToken = newToken
+                case .shared:
+                    self?.sharedDBChangeToken = newToken
+                default:
+                    // Do nothing
+                    break
+                }
+                allChanges([],[],nil)
+            } else {
+                self?.fetchZoneChanges(database: database, previousChangeToken: changeToken, zones: changedZones, allChanges: allChanges) // using CKFetchRecordZoneChangesOperation
+            }
         }
+        
         database.add(changesOperation)
     }
     
-    func fetchZoneChanges(zones: [CKRecordZone.ID], allRecords: @escaping ([CKRecord], Error?)->Void) {
-        let recordsOperation = CKFetchRecordZoneChangesOperation()
-        recordsOperation.recordZoneIDs = zones
-        var records = [CKRecord]()
+    func fetchZoneChanges(database: CKDatabase, previousChangeToken: CKServerChangeToken?,zones: [CKRecordZone.ID], allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
+        var configurationsByRecordZoneID = [CKRecordZone.ID: CKFetchRecordZoneChangesOperation.ZoneConfiguration]()
+        for zoneID in zones {
+            let configs = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
+            configs.previousServerChangeToken = previousChangeToken
+                configurationsByRecordZoneID[zoneID] = configs
+        }
+        let recordsOperation = CKFetchRecordZoneChangesOperation(recordZoneIDs: zones, configurationsByRecordZoneID: configurationsByRecordZoneID)
+        recordsOperation.fetchAllChanges = true
+        var records = [(CKRecord,CKDatabase.Scope)]()
+        var deletedRecords = [(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)]()
         recordsOperation.recordChangedBlock = { record in
-            records += [record]
+            records += [(record,database.databaseScope)]
         }
-        recordsOperation.recordZoneFetchCompletionBlock = { (_,_,_,_,error) in
-            allRecords(records,error)
+        recordsOperation.recordWithIDWasDeletedBlock = { recordID, recordType in
+            deletedRecords += [(recordID,recordType,database.databaseScope)]
         }
+        recordsOperation.recordZoneChangeTokensUpdatedBlock = { [weak self] _, serverChangeToken, _ in
+            // We use this for noting change tokens due for the deletions
+            // we have processed.
+            if let serverChangeToken = serverChangeToken {
+                switch database.databaseScope {
+                case .private:
+                    self?.privateDBChangeToken = serverChangeToken
+                case .shared:
+                    self?.sharedDBChangeToken = serverChangeToken
+                default:
+                    break
+                }
+            }
+        }
+        recordsOperation.recordZoneFetchCompletionBlock = { [weak self](_,serverChangeToken,_,moreComing,error) in
+            // We use this for noting change tokens due for the
+            // new records we have retreived
+            if let serverChangeToken = serverChangeToken {
+                switch database.databaseScope {
+                case .private:
+                    self?.privateDBChangeToken = serverChangeToken
+                case .shared:
+                    self?.sharedDBChangeToken = serverChangeToken
+                default:
+                    break
+                }
+            }
+        }
+        recordsOperation.fetchRecordZoneChangesCompletionBlock = {
+            error in
+            allChanges(records,deletedRecords,error)
+        }
+        database.add(recordsOperation)
     }
     
     /**
@@ -325,124 +467,6 @@ class CloudKitConnector: AssuredState {
         }
         av.privateDatabase.add(queryOp)
     }
-    
-    /**
-     fetch records of record type accross both private
-     and shared databases.
-    */
-    func fetchRecords(recordType: String, callback: @escaping ([(CKRecord,CKDatabase.Scope)], Error?)->Void) {
-        guard assuredValues != nil else { return }
-        fetchPrivateRecords(recordType: recordType) { [weak self](records, error) in
-            var records:[(CKRecord,CKDatabase.Scope)] = records.map { ($0, .private) }
-            var errors: [Error] = error != nil ? [error!] : []
-            if let error = error {
-                callback(records,error)
-            } else if self?.sharedDatabase == nil {
-                callback(records,error)
-            } else if let sharedDatabase = self?.sharedDatabase {
-                sharedDatabase.fetchAllRecordZones() { (zones, error) in
-                    var ops: [CKQueryOperation] = []
-                    guard let zones = zones else {
-                        callback(records,error)
-                        return
-                    }
-                    for zone in zones {
-                        if let op = self?.fetchRecordsOperation(recordType: recordType, zoneID: zone.zoneID, callback: { (zoneRecords, error) in
-                            records += zoneRecords.map { ($0,.shared) }
-                            if let error = error { errors += [error] }
-                        }) {
-                            ops += [op]
-                        }
-                    }
-                    if let lastOp = ops.last {
-                        lastOp.completionBlock = {
-                            callback(records,errors.last)
-                        }
-                        for op in ops {
-                            if op != lastOp {
-                                lastOp.addDependency(op)
-                            }
-                        }
-                    }
-                    for op in ops {
-                        sharedDatabase.add(op)
-                    }
-                }
-            }
-        }
-    }
-    
-    private func fetchRecordsOperation(recordType: String, zoneID: CKRecordZone.ID ,callback: @escaping ([CKRecord], Error?)->Void)->CKQueryOperation {
-        let predicate = NSPredicate(value: true)
-        let query = CKQuery(recordType: recordType, predicate: predicate)
-        var records = [CKRecord]()
-        let queryOp = CKQueryOperation(query: query)
-        queryOp.zoneID = zoneID
-        queryOp.recordFetchedBlock = {
-            ckRecord in
-            // Do we get here
-            records += [ckRecord]
-        }
-        queryOp.queryCompletionBlock = {
-            cursor, error in
-            callback(records, error)
-        }
-        return queryOp
-    }
-    
-//    func getSharedRecords(callback: @escaping (([String: NSNumber]) -> Void)) {
-//        var sharedData = [String: NSNumber]()
-//        guard isCloudKitEnabeld else {
-//            callback(sharedData)
-//            return
-//        }
-//
-//        sharedDatabase.fetchAllRecordZones { zones, error in
-//            if let err = error {
-//                print("Error fetting shared record zones: \(err)")
-//                callback(sharedData)
-//                return
-//            }
-//            guard let recordZones = zones else {
-//                print("no error getting shared zones, but no zones returned")
-//                callback(sharedData)
-//                return
-//            }
-//            if recordZones.isEmpty {
-//                callback(sharedData)
-//                return
-//            }
-//            var zoneQueriesReturned = 0
-//            for zone in recordZones {
-//                let query = CKQuery(recordType: CloudKitAccessor.kRecordType, predicate: NSPredicate(value: true))
-//                let queryOperation = CKQueryOperation(query: query)
-//                queryOperation.zoneID = zone.zoneID
-//                queryOperation.qualityOfService = .userInteractive
-//                queryOperation.queuePriority = .high
-//                queryOperation.recordFetchedBlock = { record in
-//                    guard let count = record[CloudKitAccessor.kCountKey] as? NSNumber else {
-//                        print("Malformed shared record, skipping: \(record)")
-//                        return
-//                    }
-//                    let recordNameID = record.recordID.zoneID.ownerName
-//                    let name = SharedUserStore.getSharedUserDisplayName(nameID: recordNameID) ?? record.recordID.zoneID.ownerName
-//                    sharedData[name] = count
-//                }
-//                queryOperation.queryCompletionBlock = { cursor, error in
-//                    if let err = error {
-//                        print("Error running shared query: \(err)")
-//                    }
-//                }
-//                queryOperation.completionBlock = {
-//                    zoneQueriesReturned += 1
-//                    if zoneQueriesReturned == recordZones.count {
-//                        callback(sharedData)
-//                    }
-//                }
-//                self.sharedDatabase.add(queryOperation)
-//            }
-//        }
-//    }
 
     /**
      A method for saving a single CKRecord.
@@ -558,8 +582,18 @@ class CloudKitConnector: AssuredState {
         }
     }
     
+    /**
+     Get the sharing controller which
+     can be used to share a record.
+     If the record has already been
+     shared, this method returns nil.
+    */
     func shareRecord(_ record: CKRecord)->UICloudSharingController? {
         guard let av = assuredValues else { return nil }
+        if record.share != nil {
+            // Already shared
+            return nil
+        }
         let controller = UICloudSharingController {
             controller, preparationCompletionHandler in
             let share = CKShare(rootRecord: record)

@@ -33,12 +33,10 @@ struct WabblerSessionFailureSet: OptionSet, Hashable {
 }
 
 protocol WabblerAssuredState {
-    //var stateError: ((WabblerGameSessionError)->Void)? { get set }
-    //var failureStates: WabblerSessionFailureSet { get set }
-    var isAssured: Bool { get }
+    static var isAssured: Bool { get }
 }
 
-struct WabblerCloudPlayer: Codable, Hashable {
+struct WabblerCloudPlayer: Codable, Hashable, Equatable {
     var displayName: String?
     var playerID: String?
     var modificationDate: Date?
@@ -77,7 +75,7 @@ protocol WabblerGameSessionEventListener {
 }
 
 class WabblerGameSession: WabblerAssuredState {
-    var isAssured: Bool {
+    static var isAssured: Bool {
         let connectorInitialised = CloudKitConnector.sharedConnector.failureStates.isEmpty
         if WabblerGameSession.localPlayer != nil, connectorInitialised {
             return true
@@ -95,6 +93,12 @@ class WabblerGameSession: WabblerAssuredState {
     static func == (lhs: WabblerGameSession, rhs: WabblerGameSession) -> Bool { return true }
     static var stateError: ((Error) -> Void)?
     static var localPlayer: WabblerCloudPlayer?
+    var remotePlayer: WabblerCloudPlayer? {
+        if WabblerGameSession.localPlayerRecord?.recordID == record.creatorUserRecordID {
+            return opponent
+        }
+        return nil
+    }
     static var localPlayerName: String?
     fileprivate static var localPlayerRecord: CKRecord?
     fileprivate static let recordType = "WabblerGameSession"
@@ -377,21 +381,25 @@ class WabblerGameSession: WabblerAssuredState {
     
     static func loadPrivateSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
         guard let av = CloudKitConnector.sharedConnector.assuredValues else { return }
-        WabblerGameSession.loadSessions(database: av.privateDatabase, completionHandler: completionHandler)
+        WabblerGameSession.loadSessions(databaseScope: av.privateDatabase.databaseScope, completionHandler: completionHandler)
     }
     
     static func loadSharedSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
-        guard CloudKitConnector.sharedConnector.assuredValues != nil else { return }
-        guard let sharedDB = CloudKitConnector.sharedConnector.sharedDatabase else { return }
-        WabblerGameSession.loadSessions(database: sharedDB, completionHandler: completionHandler)
+        guard let av = CloudKitConnector.sharedConnector.assuredValues else { return }
+        WabblerGameSession.loadSessions(databaseScope: av.sharedDatabase.databaseScope, completionHandler: completionHandler)
     }
     
-    static private func loadSessions(database: CKDatabase, completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
+    static private func loadSessions(databaseScope: CKDatabase.Scope, completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
         var sessions = [WabblerGameSession]()
-        CloudKitConnector.sharedConnector.fetchRecords(database: database, recordType: WabblerGameSession.recordType) {
-            ckRecords, error in
+        CloudKitConnector.sharedConnector.fetchChanges(databaseScope: databaseScope, changeToken: nil) {
+            ckRecords, deletions, error in
             for record in ckRecords {
-                sessions += [WabblerGameSession(record: record, scope: database.databaseScope)]
+                if record.0.recordType == WabblerGameSession.recordType {
+                    sessions += [WabblerGameSession(record: record.0, scope: record.1)]
+                } else {
+                    print("Non Wabbler Session record received")
+                    print(record)
+                }
             }
             DispatchQueue.main.async {
                 completionHandler(sessions, error)
@@ -399,13 +407,47 @@ class WabblerGameSession: WabblerAssuredState {
         }
     }
     
+    static func updateForChanges(databaseScope:CKDatabase.Scope, completion: ((Bool)->Void )? ) {
+        guard let delegate = WabblerGameSession.eventListenerDelegate else { return }
+        guard WabblerGameSession.isAssured else { return }
+        CloudKitConnector.sharedConnector.fetchLatestChanges(databaseScope: databaseScope) { (records, deletions, error) in
+            for record in records {
+                if record.0.recordType == WabblerGameSession.recordType {
+                    let gameSession = WabblerGameSession(record: record.0, scope: record.1)
+                    var player: WabblerCloudPlayer? = nil
+                    if record.0.lastModifiedUserRecordID == WabblerGameSession.localPlayerRecord!.recordID {
+                        player = WabblerGameSession.localPlayer!
+                    } else {
+                        player = gameSession.remotePlayer
+                    }
+                    guard player != nil else { return }
+                    guard let data = record.0[WabblerGameSession.keys.cachedData] as? Data else { return }
+                    delegate.session(gameSession, player: player!, didSave: data)
+                } else {
+                    print("Non Game Session Record Update Received for database: \(record.1)")
+                    print(record.0)
+                }
+            }
+            for deletion in deletions {
+                print(deletion)
+            }
+            if let error = error {
+                print("Errors:")
+                print(error)
+            }
+        }
+    }
+    
     static func loadSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
         guard CloudKitConnector.sharedConnector.assuredValues != nil else { return }
         var sessions = [WabblerGameSession]()
-        CloudKitConnector.sharedConnector.fetchRecords(recordType: WabblerGameSession.recordType) {
-            ckRecords, error in
-            for record in ckRecords {
-                sessions += [WabblerGameSession(record: record.0, scope: record.1)]
+        CloudKitConnector.sharedConnector.fetchRecords() {
+            records, error in
+            for (ckRecord,scope) in records {
+                if ckRecord.recordType == WabblerGameSession.recordType {
+                    sessions += [WabblerGameSession(record: ckRecord, scope: scope)]
+                }
+                sessions.sort { s1,s2 in s1.lastModifiedDate!.timeIntervalSince1970 > s2.lastModifiedDate!.timeIntervalSince1970 }
             }
             DispatchQueue.main.async {
                 completionHandler(sessions, error)
@@ -428,7 +470,6 @@ class WabblerGameSession: WabblerAssuredState {
 
 extension WabblerGameSession: Hashable {
     func hash(into hasher: inout Hasher) {
-        hasher.combine(record)
-        hasher.combine(players)
+        hasher.combine(record.recordID)
     }
 }

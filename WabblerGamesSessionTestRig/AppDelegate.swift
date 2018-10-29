@@ -31,11 +31,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Override point for customization after application launch.
         TestRigUbiquityStore.ubiquityStore.synchronize()
         myDebugPrint("[] application:didFinishLaunchingWithOptions")
+        let center = UNUserNotificationCenter.current()
+        // Request permission to display alerts and play sounds.
+        center.requestAuthorization(options: [.badge, .alert, .sound])
+        { (granted, error) in
+            // Enable or disable features based on authorization.
+            print(granted)
+        }
         application.registerForRemoteNotifications()
-//        UIUserNotificationSettings *notificationSettings = [UIUserNotificationSettings settingsForTypes:UIUserNotificationTypeAlert categories:nil];
-//        [application registerUserNotificationSettings:notificationSettings];
-//        [application registerForRemoteNotifications];
         return true
+    }
+    
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        if let notification = CKDatabaseNotification(fromRemoteNotificationDictionary: userInfo) as? CKDatabaseNotification {
+            WabblerGameSession.updateForChanges(databaseScope: notification.databaseScope) { (recordsObtained) in
+                completionHandler(recordsObtained ? .newData : .noData)
+            }
+        }
     }
     
     func applicationWillResignActive(_ application: UIApplication) {
