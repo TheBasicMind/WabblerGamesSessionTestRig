@@ -46,6 +46,16 @@ class ViewController: UIViewController {
         WabblerGameSession.initialiseCloudKitConnection(localPlayerName: "Paul")
         WabblerGameSession.add(listener: self)
         manuallyJoinGameButton?.isEnabled = !GKGameSessionRigBools.joinAtStartUp
+        WabblerGameSession.stateError = { [weak self] error in
+            if let wabblerError = error as? WabblerGameSessionError {
+                if wabblerError == .localPlayerNotSignedIn {
+                    print("Local Player Not Signed In")
+                    // Possibly at sign-in Cloud Kit returned CKError.Code.notAuthenticated
+                }
+            } else if let ckError = error as? CKError {
+                print(ckError)
+            }
+        }
     }
     
     override func didReceiveMemoryWarning() {
@@ -141,7 +151,7 @@ class ViewController: UIViewController {
 //    }
     
     @IBAction func createSession(_ sender: Any) {
-        guard CloudKitConnector.sharedConnector.assuredValues != nil else { return }
+        guard WabblerGameSession.isAssured else { return }
         WabblerGameSession.createSession(withTitle: "Wabble Two Player Owned by \(signedInPlayer?.displayName ?? "Null"), id: \(signedInPlayer?.playerID?.strHash() ?? "Null")") {
             [weak self] (gameSession, error) in
             if let error = error as? WabblerGameSessionError {

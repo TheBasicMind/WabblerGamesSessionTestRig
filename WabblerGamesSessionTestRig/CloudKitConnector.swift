@@ -11,6 +11,21 @@ import CloudKit
 import UIKit
 
 
+protocol AssuredValues { } // All values on conforming type must be non-optional for conforming types
+protocol AssuredState {
+    associatedtype AssuredValueType: AssuredValues
+    var stateError: ((Error?)->Void)? { get set }
+    func assuredFromOptional()->AssuredValueType? // Ensure implementation calls stateError if assurance cannot be provided
+}
+
+struct AssuredConnectionValues: AssuredValues {
+    let container: CKContainer
+    let privateSubscription: CKSubscription
+    let privateDatabase: CKDatabase
+    let sharedDatabase: CKDatabase
+    let privateZone: CKRecordZone
+}
+
 enum CloudKitConnectorStrings {
     static let privateSubName                   = "wabbler-private-games"
     static let sharedSubName                    = "wabbler-shared-games"
@@ -21,74 +36,7 @@ enum CloudKitConnectorError: Error {
     case accountRestricted
     case couldNotDetermineAccountStatus
     case badState // For this one, check the failure states
-}
-
-/**
- State verification so we have some formal
- structure around forced optionals that are
- configured asyncronously
- */
-struct FailureSet: OptionSet {
-    let rawValue: Int
-    static let notSignedInToICloud          = FailureSet(rawValue: 1 << 0)
-    static let noPrivateDBSub               = FailureSet(rawValue: 1 << 1)
-    static let noSharedDBSub                = FailureSet(rawValue: 1 << 2)
-    static let noPrivateZone                = FailureSet(rawValue: 1 << 3)
-    static let noPrivateDB                  = FailureSet(rawValue: 1 << 4)
-    static let noSharedDB                   = FailureSet(rawValue: 1 << 5)
-}
-
-protocol Assurable {
-    func assuredForOptional()->AssuredValues?
-}
-
-struct AssuredValues {
-    let container: CKContainer
-    let privateSubscription: CKSubscription
-    let privateDatabase: CKDatabase
-    let privateZone: CKRecordZone
-    let sharedDatabase: CKDatabase
-}
-
-protocol OptionalValues: Assurable {
-    var container: CKContainer? { get set }
-    var privateSubscription: CKSubscription? { get set }
-    var privateDatabase: CKDatabase? { get set }
-    var sharedDatabase: CKDatabase? { get set }
-    var privateZone: CKRecordZone? { get set }
-}
-
-extension OptionalValues {
-    func assuredForOptional()->AssuredValues? {
-        if let c = container,
-        let ps = privateSubscription,
-        let pd = privateDatabase,
-        let pz = privateZone,
-        let sd = sharedDatabase {
-            return AssuredValues(container: c, privateSubscription: ps, privateDatabase: pd, privateZone: pz, sharedDatabase: sd)
-        } else {
-            return nil
-        }
-    }
-}
-
-protocol AssuredState: OptionalValues {
-    var stateError: ((CloudKitConnectorError)->Void)? { get set }
-    var failureStates: FailureSet { get set }
-    var assuredValues: AssuredValues? { get }// use in a guard let statement ensures all values are available
-}
-
-extension AssuredState {
-    var assuredValues: AssuredValues? {
-        get {
-            if let assured = assuredForOptional() {
-                return assured
-            } else {
-                stateError?(.badState)
-                return nil
-            }
-        }
-    }
+    case unknown
 }
 
 enum DatabaseVisibility {
@@ -105,11 +53,13 @@ enum DatabaseVisibility {
  used.
  */
 class CloudKitConnector: AssuredState {
+    typealias OptionalValueType = CloudKitConnector
+    typealias AssuredValueType = AssuredConnectionValues
     static let sharedConnector = CloudKitConnector()
     private init() { }
-    var stateError: ((CloudKitConnectorError)->Void)?
-    var failureStates: FailureSet = [.notSignedInToICloud,.noPrivateDBSub,.noSharedDBSub,.noPrivateZone,.noPrivateDB,.noSharedDB]
-    // Assured properties
+    var stateError: ((Error?)->Void)?
+    // Assured optionals
+    var signedInToICloud: Bool = false
     var container: CKContainer?
     var privateSubscription: CKSubscription?
     var sharedSubscription: CKSubscription?
@@ -131,6 +81,19 @@ class CloudKitConnector: AssuredState {
     var remoteRecordUpdatedCompletion: ((CKRecord?, CKRecord.ID?, Error?)->Void)?
     var remoteRecordDeletedCompletion: ((CKRecord.ID?, Error?)->Void)?
     
+    func assuredFromOptional() -> AssuredConnectionValues? {
+        if let container = container,
+           let privateSubscription = privateSubscription,
+           let privateDatabase = privateDatabase,
+           let sharedDatabase = sharedDatabase,
+           let privateZone = privateZone {
+           return AssuredConnectionValues(container: container, privateSubscription: privateSubscription, privateDatabase: privateDatabase, sharedDatabase: sharedDatabase, privateZone: privateZone)
+        } else {
+            stateError?(nil)
+            return nil
+        }
+    }
+
     func connect(containerIdentifier: String?, zoneName:String) {
         var container: CKContainer
         if let containerIdentifier = containerIdentifier {
@@ -144,19 +107,17 @@ class CloudKitConnector: AssuredState {
             status, error in
             switch status {
             case .available:
-                self.failureStates.remove(.notSignedInToICloud)
+                self.signedInToICloud = true
                 self.privateDatabase = container.privateCloudDatabase
                 self.sharedDatabase = container.sharedCloudDatabase
-                self.failureStates.remove(.noPrivateDB)
-                self.failureStates.remove(.noSharedDB)
                 self.continueConnection(zoneName: zoneName)
             case .noAccount:
                 // User not logged in to iCloud
-                self.stateError?(.signInRequired)
+                self.stateError?(CloudKitConnectorError.signInRequired)
             case .couldNotDetermine:
-                self.stateError?(.couldNotDetermineAccountStatus)
+                self.stateError?(CloudKitConnectorError.couldNotDetermineAccountStatus)
             case .restricted:
-                self.stateError?(.accountRestricted)
+                self.stateError?(CloudKitConnectorError.accountRestricted)
             }
         }
     }
@@ -172,19 +133,17 @@ class CloudKitConnector: AssuredState {
                 print(error)
                 print(error.localizedDescription)
                 let ckError = error as NSError
-                if ckError.code == CKError.zoneNotFound.rawValue {
+                if ckError.code == CKError.zoneNotFound.rawValue || ckError.code == CKError.userDeletedZone.rawValue {
                     CloudKitConnector.sharedConnector.privateDatabase?.save(recordZone) { (newZone, error) in
                         if let error = error {
                             print(error.localizedDescription)
                         } else {
                             CloudKitConnector.sharedConnector.privateZone = newZone
-                            self.failureStates.remove(.noPrivateZone)
                         }
                     }
                 }
             } else {
                 CloudKitConnector.sharedConnector.privateZone = retreivedZone
-                self.failureStates.remove(.noPrivateZone)
             }
         }
         
@@ -195,7 +154,6 @@ class CloudKitConnector: AssuredState {
             if error == nil {
                 if let sub = subscriptions?.first {
                     self?.privateSubscription = sub
-                    self?.failureStates.remove(.noPrivateDBSub)
                     print("Subscription created: \(sub)")
                 }
             } else {
@@ -219,7 +177,6 @@ class CloudKitConnector: AssuredState {
             if error == nil {
                 if let sub = subscriptions?.first {
                     self?.sharedSubscription = sub
-                    self?.failureStates.remove(.noSharedDBSub)
                     print("Subscription created: \(sub)")
                 }
             } else {
@@ -232,14 +189,14 @@ class CloudKitConnector: AssuredState {
     private func createDatabaseSubscriptionOperation(subscriptionId: String) -> CKModifySubscriptionsOperation {
         let subscription = CKDatabaseSubscription(subscriptionID: subscriptionId)
         
-        //let notificationInfo = CKSubscription.NotificationInfo()
+        let notificationInfo = CKSubscription.NotificationInfo()
         //notificationInfo.shouldSendContentAvailable = true
-        //subscription.notificationInfo = notificationInfo
-        subscription.recordType = "WabblerGameSession"
+        notificationInfo.alertBody = "This is the alert body text."
+        subscription.notificationInfo = notificationInfo
         
+        subscription.recordType = "WabblerGameSession"
         let operation = CKModifySubscriptionsOperation(subscriptionsToSave: [subscription], subscriptionIDsToDelete: [])
         operation.qualityOfService = .utility
-        
         return operation
     }
 
@@ -276,7 +233,7 @@ class CloudKitConnector: AssuredState {
      request is made.
      */
     func fetchRecords(allRecords: @escaping ([(CKRecord,CKDatabase.Scope)], Error?)->Void) {
-        guard let av = assuredValues else { return }
+        guard let av = assuredFromOptional() else { return }
         fetchChanges(database: av.privateDatabase,changeToken: nil) { [weak self](records, deletions, error) in
             var zippedRecords:[(CKRecord,CKDatabase.Scope)] = records.map { ($0.0, .private) }
             if let error = error {
@@ -312,7 +269,7 @@ class CloudKitConnector: AssuredState {
      or all changes if no change token is supplied
      */
     func fetchChanges(databaseScope: CKDatabase.Scope, changeToken: CKServerChangeToken?, allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
-        guard let av = assuredValues else { return }
+        guard let av = assuredFromOptional() else { return }
         let database: CKDatabase
         switch databaseScope {
         case .private:
@@ -450,7 +407,7 @@ class CloudKitConnector: AssuredState {
      from the privateDB and again with results from the publicDB
      */
     func fetchPrivateRecords(recordType: String, callback: @escaping ([CKRecord], Error?)->Void) {
-        guard let av = assuredValues else { return }
+        guard let av = assuredFromOptional() else { return }
         let predicate = NSPredicate(value: true)
         let query = CKQuery(recordType: recordType, predicate: predicate)
         var records = [CKRecord]()
@@ -499,7 +456,7 @@ class CloudKitConnector: AssuredState {
      -  error: If there was an error saving it is returned here
     */
     func modify(record: CKRecord?, recordID: CKRecord.ID?, scope: CKDatabase.Scope, saveCompletion:((CKRecord?, Error?)->Void)?, deleteCompletion: ((CKRecord.ID?, Error?)->Void)?) {
-        guard let av = assuredValues else { return }
+        guard let av = assuredFromOptional() else { return }
         var recordsToSave: [CKRecord]? = nil
         var recordsToDelete: [CKRecord.ID]? = nil
         if let record = record {
@@ -534,10 +491,10 @@ class CloudKitConnector: AssuredState {
                     deleteCompletion?(recordID,saveError)
                 } else {
                     if let saveCompletion = saveCompletion {
-                        saveCompletion(record, WabblerGameSessionError.unknownError)
+                        saveCompletion(record, CloudKitConnectorError.unknown)
                     }
                     if let deleteCompletion = deleteCompletion {
-                        deleteCompletion(recordID, WabblerGameSessionError.unknownError)
+                        deleteCompletion(recordID, CloudKitConnectorError.unknown)
                     }
                 }
             } else {
@@ -545,7 +502,7 @@ class CloudKitConnector: AssuredState {
                     // Even though no error, still an unknown error has occured because
                     // otherwise we would have nulified this completion block in the previous
                     // block
-                    saveCompletion(record,  WabblerGameSessionError.unknownError)
+                    saveCompletion(record,  CloudKitConnectorError.unknown)
                 }
                 if let deleteCompletion = deleteCompletion {
                     if let recordID = recordIDs?.first {
@@ -566,7 +523,7 @@ class CloudKitConnector: AssuredState {
     }
     
     func loadRecord(_ recordID: CKRecord.ID, scope: CKDatabase.Scope, completion:((CKRecord?, Error?)->Void)?) {
-        guard let av = assuredValues else { return }
+        guard let av = assuredFromOptional() else { return }
         let fetchOp = CKFetchRecordsOperation(recordIDs: [recordID])
         fetchOp.perRecordCompletionBlock = {
             record, _, error in
@@ -589,7 +546,7 @@ class CloudKitConnector: AssuredState {
      shared, this method returns nil.
     */
     func shareRecord(_ record: CKRecord)->UICloudSharingController? {
-        guard let av = assuredValues else { return nil }
+        guard let av = assuredFromOptional() else { return nil }
         if record.share != nil {
             // Already shared
             return nil

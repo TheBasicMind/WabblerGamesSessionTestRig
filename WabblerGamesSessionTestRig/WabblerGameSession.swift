@@ -19,21 +19,12 @@ enum WabblerCloudPlayerStrings {
 }
 
 enum WabblerGameSessionError: Error {
-    case noCloudKitConnection
-    case localPlayerNotSignedIn
-    case unknownError
+    case cloudKitConnectionInitialisationFailed
+    case localPlayerNotSignedIn // CKError.Code.notAuthenticated
+    case unknown
     case gameDataCouldNotBeEncoded
     case serverGameDataCouldNotBeDecoded
-}
-
-struct WabblerSessionFailureSet: OptionSet, Hashable {
-    let rawValue: Int
-    static let noAssuredCloudKitConnection  = WabblerSessionFailureSet(rawValue: 1 << 0)
-    static let localPlayerNotSignedIn       = WabblerSessionFailureSet(rawValue: 1 << 1)
-}
-
-protocol WabblerAssuredState {
-    static var isAssured: Bool { get }
+    case cloudDriveDisabled // User not logged into iCloud or iCloud account restricted
 }
 
 struct WabblerCloudPlayer: Codable, Hashable, Equatable {
@@ -45,6 +36,9 @@ struct WabblerCloudPlayer: Codable, Hashable, Equatable {
      Note uses the same container as
      was set up when the Wabbler game
      session was initialised.
+     
+     If the returned error is CKError.Code.notAuthenticated
+     the user is not logged in, or his account is restricted.
     */
     static func getCurrentSignedInPlayer(completionHandler handler: @escaping (WabblerCloudPlayer?, Error?) -> Void) {
         if let localPlayer = WabblerGameSession.localPlayer {
@@ -60,6 +54,11 @@ struct WabblerCloudPlayer: Codable, Hashable, Equatable {
                         WabblerGameSession.localPlayerRecord = record
                         handler(player, error)
                     }
+                } else if let error = error {
+                    DispatchQueue.main.async {
+                        handler(nil, error)
+                    }
+                    return
                 }
             }
         }
@@ -74,24 +73,24 @@ protocol WabblerGameSessionEventListener {
     func session(_ session: WabblerGameSession, player: WabblerCloudPlayer, didSave data: Data)
 }
 
-class WabblerGameSession: WabblerAssuredState {
+class WabblerGameSession {
+    var localPlayer: WabblerCloudPlayer?
     static var isAssured: Bool {
-        let connectorInitialised = CloudKitConnector.sharedConnector.failureStates.isEmpty
-        if WabblerGameSession.localPlayer != nil, connectorInitialised {
+        let connectorAssured = CloudKitConnector.sharedConnector.assuredFromOptional()
+        if WabblerGameSession.localPlayer != nil, connectorAssured != nil {
             return true
         } else {
-            if connectorInitialised == false {
-                let error = WabblerGameSessionError.noCloudKitConnection
-                WabblerGameSession.stateError?(error)
+            if connectorAssured == nil {
+                WabblerGameSession.stateError?(WabblerGameSessionError.cloudKitConnectionInitialisationFailed)
             } else {
-                let error = WabblerGameSessionError.localPlayerNotSignedIn
-                WabblerGameSession.stateError?(error)
+                WabblerGameSession.stateError?(WabblerGameSessionError.localPlayerNotSignedIn)
             }
             return false
         }
     }
     static func == (lhs: WabblerGameSession, rhs: WabblerGameSession) -> Bool { return true }
-    static var stateError: ((Error) -> Void)?
+    static var stateError: ((Error?) -> Void)?
+    var stateError: ((Error) -> Void)?
     static var localPlayer: WabblerCloudPlayer?
     var remotePlayer: WabblerCloudPlayer? {
         if WabblerGameSession.localPlayerRecord?.recordID == record.creatorUserRecordID {
@@ -380,12 +379,12 @@ class WabblerGameSession: WabblerAssuredState {
     }
     
     static func loadPrivateSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
-        guard let av = CloudKitConnector.sharedConnector.assuredValues else { return }
+        guard let av = CloudKitConnector.sharedConnector.assuredFromOptional() else { return }
         WabblerGameSession.loadSessions(databaseScope: av.privateDatabase.databaseScope, completionHandler: completionHandler)
     }
     
     static func loadSharedSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
-        guard let av = CloudKitConnector.sharedConnector.assuredValues else { return }
+        guard let av = CloudKitConnector.sharedConnector.assuredFromOptional() else { return }
         WabblerGameSession.loadSessions(databaseScope: av.sharedDatabase.databaseScope, completionHandler: completionHandler)
     }
     
@@ -422,7 +421,9 @@ class WabblerGameSession: WabblerAssuredState {
                     }
                     guard player != nil else { return }
                     guard let data = record.0[WabblerGameSession.keys.cachedData] as? Data else { return }
-                    delegate.session(gameSession, player: player!, didSave: data)
+                    DispatchQueue.main.async {
+                        delegate.session(gameSession, player: player!, didSave: data)
+                    }
                 } else {
                     print("Non Game Session Record Update Received for database: \(record.1)")
                     print(record.0)
@@ -439,7 +440,7 @@ class WabblerGameSession: WabblerAssuredState {
     }
     
     static func loadSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
-        guard CloudKitConnector.sharedConnector.assuredValues != nil else { return }
+        guard CloudKitConnector.sharedConnector.assuredFromOptional() != nil else { return }
         var sessions = [WabblerGameSession]()
         CloudKitConnector.sharedConnector.fetchRecords() {
             records, error in
