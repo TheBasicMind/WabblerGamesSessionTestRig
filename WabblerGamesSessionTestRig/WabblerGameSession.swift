@@ -65,8 +65,10 @@ struct WabblerCloudPlayer: Codable, Hashable, Equatable {
 }
 
 protocol WabblerGameSessionEventListener {
+    /**
+     When called, the session record has the local player added but has not yet been saved back to the server
+    */
     func session(_ session: WabblerGameSession, didAdd player: WabblerCloudPlayer)
-    //func session(_ session: WabblerGameSession, didRemove player: WabblerCloudPlayer)
     func sessionWasDeleted(withIdentifier: WabblerGameSession.ID)
     func session(_ session: WabblerGameSession, didReceiveMessage message: String, with data: Data, from player: WabblerCloudPlayer)
     func session(_ session: WabblerGameSession, player: WabblerCloudPlayer, didSave data: Data)
@@ -142,7 +144,7 @@ class WabblerGameSession {
             } catch {
                 return
             }
-            record[WabblerGameSession.keys.owner] = data as NSData
+            record[WabblerGameSession.keys.opponent] = data as NSData
         }
     }
     var identifier : String {
@@ -415,10 +417,10 @@ class WabblerGameSession {
         guard let delegate = WabblerGameSession.eventListenerDelegate else { return }
         guard WabblerGameSession.assuredFromOptional() != nil else { return }
         CloudKitConnector.sharedConnector.fetchLatestChanges(databaseScope: databaseScope) { (records, deletions, error) in
-            var transactionIsSuccessful = false
             if let error = error {
                 print("Errors:")
                 print(error)
+                completion?(false)
             } else {
                 for record in records {
                     if record.0.recordType == WabblerGameSession.recordType {
@@ -426,35 +428,38 @@ class WabblerGameSession {
                         var player: WabblerCloudPlayer? = nil
                         if record.0.lastModifiedUserRecordID == WabblerGameSession.localPlayerRecord!.recordID {
                             player = WabblerGameSession.localPlayer!
-                            if gameSession.opponent == nil && record.1 == .shared {
-                                gameSession.opponent = player
-                            }
                         } else {
+                            if gameSession.opponent == nil, record.1 == .shared {
+                                gameSession.opponent = localPlayer
+                                DispatchQueue.main.async {
+                                    WabblerGameSession.eventListenerDelegate?.session(gameSession, didAdd: localPlayer!)
+                                }
+                                return
+                            }
                             player = gameSession.remotePlayer
-                        }
-                        if player == nil, record.1 == .shared {
-                            gameSession.opponent = localPlayer
                         }
                         guard let data = record.0[WabblerGameSession.keys.cachedData] as? Data else { return }
                         DispatchQueue.main.async {
-                            delegate.session(gameSession, player: player!, didSave: data)
+                            if let player = player {
+                                delegate.session(gameSession, player: player, didSave: data)
+                            } else {
+                                print("Error: Player for record was nil")
+                                print(record.0)
+                            }
                         }
                     } else if let ckShare = record.0 as? CKShare {
                         print("Non Game Session Record Update Received for database: \(record.1)")
                         print(ckShare)
                     }
-                    transactionIsSuccessful = true
                 }
                 for deletion in deletions {
                     let sessionID = deletion.0.recordName
                     DispatchQueue.main.async {
                         WabblerGameSession.eventListenerDelegate?.sessionWasDeleted(withIdentifier: sessionID)
                     }
-                    transactionIsSuccessful = true
                 }
             }
-
-            completion?(transactionIsSuccessful)
+            completion?(true)
         }
     }
     
