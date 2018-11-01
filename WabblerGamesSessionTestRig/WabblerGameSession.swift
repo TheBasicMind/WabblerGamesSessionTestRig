@@ -47,10 +47,9 @@ struct WabblerCloudPlayer: Codable, Hashable, Equatable {
             CloudKitConnector.sharedConnector.fetchUserRecord(containerIdentifier: nil) {
                 record, error in
                 if let record = record  {
-                    print(record)
+                    print(record.description)
                     DispatchQueue.main.async {
-                        let player = WabblerCloudPlayer(displayName: record[WabblerCloudPlayerStrings.displayName] ?? WabblerGameSession.localPlayerName ?? "Name not defined", playerID: record.recordID.recordName, modificationDate: record.modificationDate)
-                        WabblerGameSession.localPlayer = player
+                        let player = WabblerCloudPlayer(displayName: record[WabblerCloudPlayerStrings.displayName] ?? WabblerGameSession.localPlayerDisplayName ?? "Name not defined", playerID: record.recordID.recordName, modificationDate: record.modificationDate)
                         WabblerGameSession.localPlayerRecord = record
                         handler(player, error)
                     }
@@ -66,87 +65,50 @@ struct WabblerCloudPlayer: Codable, Hashable, Equatable {
 }
 
 protocol WabblerGameSessionEventListener {
-    func sessionConnectionStateError(error:Error)
     func session(_ session: WabblerGameSession, didAdd player: WabblerCloudPlayer)
-    func session(_ session: WabblerGameSession, didRemove player: WabblerCloudPlayer)
+    //func session(_ session: WabblerGameSession, didRemove player: WabblerCloudPlayer)
+    func sessionWasDeleted(withIdentifier: WabblerGameSession.ID)
     func session(_ session: WabblerGameSession, didReceiveMessage message: String, with data: Data, from player: WabblerCloudPlayer)
     func session(_ session: WabblerGameSession, player: WabblerCloudPlayer, didSave data: Data)
 }
 
 class WabblerGameSession {
-    var localPlayer: WabblerCloudPlayer?
-    static var isAssured: Bool {
-        let connectorAssured = CloudKitConnector.sharedConnector.assuredFromOptional()
-        if WabblerGameSession.localPlayer != nil, connectorAssured != nil {
-            return true
-        } else {
-            if connectorAssured == nil {
-                WabblerGameSession.stateError?(WabblerGameSessionError.cloudKitConnectionInitialisationFailed)
-            } else {
-                WabblerGameSession.stateError?(WabblerGameSessionError.localPlayerNotSignedIn)
-            }
-            return false
-        }
-    }
+    typealias ID = String
     static func == (lhs: WabblerGameSession, rhs: WabblerGameSession) -> Bool { return true }
     static var stateError: ((Error?) -> Void)?
     var stateError: ((Error) -> Void)?
-    static var localPlayer: WabblerCloudPlayer?
-    var remotePlayer: WabblerCloudPlayer? {
-        if WabblerGameSession.localPlayerRecord?.recordID == record.creatorUserRecordID {
-            return opponent
+    static var localPlayer: WabblerCloudPlayer? {
+        if let playerRecord = localPlayerRecord {
+            return WabblerCloudPlayer(displayName: playerRecord[WabblerCloudPlayerStrings.displayName] ?? WabblerGameSession.localPlayerDisplayName ?? "Name not defined", playerID: playerRecord.recordID.recordName, modificationDate: playerRecord.modificationDate)
         }
         return nil
     }
-    static var localPlayerName: String?
+    var remotePlayer: WabblerCloudPlayer? {
+        if WabblerGameSession.localPlayerRecord?.recordID == record.creatorUserRecordID {
+            return owner
+        } else {
+            return opponent
+        }
+    }
+    static var localPlayerDisplayName: String?
     fileprivate static var localPlayerRecord: CKRecord?
     fileprivate static let recordType = "WabblerGameSession"
-    fileprivate static let keys = (identifier : "name", lastModifiedDate : "lastModifiedDate", players: "players", title : "title", cachedData: "cachedData")
+    fileprivate static let keys = (identifier : "name", lastModifiedDate : "lastModifiedDate", players: "players", title : "title", cachedData: "cachedData", owner: "owner", opponent: "opponent")
     private static var eventListenerDelegate: WabblerGameSessionEventListener?
     private var record : CKRecord //
     let scope: CKDatabase.Scope
     var owner: WabblerCloudPlayer? {
-        if players.count > 0 {
-            return players[0]
-        } else {
-            return nil
-        }
-    }
-    var opponent: WabblerCloudPlayer?
-    
-    var identifier : String {
         get {
-            return record.recordID.recordName
-        }
-    }
-    
-    var creationDate: Date? {
-        get {
-            return record.creationDate
-        }
-    }
-    
-    var lastModifiedDate : Date? {
-        get {
-            return record.modificationDate
-        }
-    }
-    
-    var players: [WabblerCloudPlayer] {
-        get {
-            let players: [WabblerCloudPlayer]
-            if let data = self.record[WabblerGameSession.keys.players] as? NSData {
+            var player: WabblerCloudPlayer? = nil
+            if let data = self.record[WabblerGameSession.keys.owner] as? NSData {
                 let decoder = JSONDecoder()
                 do {
-                    players = try decoder.decode(Array<WabblerCloudPlayer>.self, from: data as Data)
+                    player = try decoder.decode(WabblerCloudPlayer.self, from: data as Data)
                 } catch {
                     print(error.localizedDescription)
-                    players = []
                 }
-            } else {
-                players = []
             }
-            return players
+            return player
         }
         set {
             let encoder = JSONEncoder()
@@ -156,10 +118,58 @@ class WabblerGameSession {
             } catch {
                 return
             }
-            record[WabblerGameSession.keys.players] = data as NSData
+            record[WabblerGameSession.keys.owner] = data as NSData
         }
     }
-    
+    var opponent: WabblerCloudPlayer? {
+        get {
+            var player: WabblerCloudPlayer? = nil
+            if let data = self.record[WabblerGameSession.keys.opponent] as? NSData {
+                let decoder = JSONDecoder()
+                do {
+                    player = try decoder.decode(WabblerCloudPlayer.self, from: data as Data)
+                } catch {
+                    print(error.localizedDescription)
+                }
+            }
+            return player
+        }
+        set {
+            let encoder = JSONEncoder()
+            let data: Data
+            do {
+                data = try encoder.encode(newValue)
+            } catch {
+                return
+            }
+            record[WabblerGameSession.keys.owner] = data as NSData
+        }
+    }
+    var identifier : String {
+        get {
+            return record.recordID.recordName
+        }
+    }
+    var creationDate: Date? {
+        get {
+            return record.creationDate
+        }
+    }
+    var lastModifiedDate : Date? {
+        get {
+            return record.modificationDate
+        }
+    }
+    var players: [WabblerCloudPlayer] {
+        var players = [WabblerCloudPlayer]()
+        if let owner = owner {
+            players += [owner]
+            if let opponent = opponent {
+                players += [opponent]
+            }
+        }
+        return players
+    }
     var title : String {
         get {
             return record[WabblerGameSession.keys.title] as! String
@@ -169,16 +179,35 @@ class WabblerGameSession {
         }
     }
     
+    /**
+     Returns nil if game session is not assured
+     The cloud kit connector also needs to be assured.
+     Returns the CloudKitConnector assured values if
+     successful.
+    */
+    static func assuredFromOptional()-> AssuredConnectionValues? {
+        let assuredValues = CloudKitConnector.sharedConnector.assuredFromOptional()
+        if WabblerGameSession.localPlayer != nil, assuredValues != nil {
+            return assuredValues
+        } else {
+            if assuredValues == nil {
+                WabblerGameSession.stateError?(WabblerGameSessionError.cloudKitConnectionInitialisationFailed)
+            } else {
+                WabblerGameSession.stateError?(WabblerGameSessionError.localPlayerNotSignedIn)
+            }
+            return nil
+        }
+    }
+    
     private init(scope: CKDatabase.Scope) throws {
         let recordZone = CKRecordZone(zoneName: WabblerGameSessionStrings.gamesZoneName)
         let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: recordZone.zoneID)
         let myRecord = CKRecord(recordType: WabblerGameSession.recordType, recordID:recordID)
         self.scope = scope
         self.record = myRecord
-        guard let player = WabblerGameSession.localPlayer else {
+        guard WabblerGameSession.localPlayer != nil else {
             throw WabblerGameSessionError.localPlayerNotSignedIn
         }
-        self.players = [player]
         self.title = ""
     }
     
@@ -192,45 +221,21 @@ class WabblerGameSession {
      be set before cloudkit is initialised
     */
     static func initialiseCloudKitConnection(localPlayerName: String) {
-        WabblerGameSession.localPlayerName = localPlayerName
+        WabblerGameSession.localPlayerDisplayName = localPlayerName
         CloudKitConnector.sharedConnector.stateError = {
             error in
             WabblerGameSession.stateError?(error)
         }
         CloudKitConnector.sharedConnector.connect(containerIdentifier: nil, zoneName: WabblerGameSessionStrings.gamesZoneName)
         WabblerCloudPlayer.getCurrentSignedInPlayer { (player, error) in
-            WabblerGameSession.localPlayer = player
             if let error = error {
                 print(error.localizedDescription)
-            }
-        }
-        CloudKitConnector.sharedConnector.remoteRecordDeletedCompletion = { recordID, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    
-                } else {
-                    // If the record is not owned by
-                    // the current player, call player
-                    // removed from share.
-                    
-                    //WabblerGameSession.eventListenerDelegate.
-                }
-            }
-        }
-        CloudKitConnector.sharedConnector.remoteRecordUpdatedCompletion = { record, recordID, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    // If the record is not owned by
-                    // the current player, call player
-                    // removed from share.
-                } else {
-                    
-                }
             }
         }
     }
     
     static func createSession(withTitle title: String, completionHandler: @escaping (WabblerGameSession?, Error?) -> Void) {
+        guard WabblerGameSession.assuredFromOptional() != nil else { return }
         var newSession: WabblerGameSession?
         do {
             newSession = try WabblerGameSession(scope:.private)
@@ -238,11 +243,7 @@ class WabblerGameSession {
             completionHandler(nil, error)
         }
         newSession!.title = title
-        guard let player = WabblerGameSession.localPlayer else {
-            WabblerGameSession.stateError?(WabblerGameSessionError.localPlayerNotSignedIn)
-            return
-        }
-        newSession?.players = [player]
+        newSession?.owner = WabblerGameSession.localPlayer!
         
         CloudKitConnector.sharedConnector.save(record: newSession!.record, scope: .private) { (record, error) in
             let modSession = record != nil ? newSession : nil
@@ -406,36 +407,54 @@ class WabblerGameSession {
         }
     }
     
+    /**
+     Call when a CKDatabaseSubscription based push notication
+     has been received.
+    */
     static func updateForChanges(databaseScope:CKDatabase.Scope, completion: ((Bool)->Void )? ) {
         guard let delegate = WabblerGameSession.eventListenerDelegate else { return }
-        guard WabblerGameSession.isAssured else { return }
+        guard WabblerGameSession.assuredFromOptional() != nil else { return }
         CloudKitConnector.sharedConnector.fetchLatestChanges(databaseScope: databaseScope) { (records, deletions, error) in
-            for record in records {
-                if record.0.recordType == WabblerGameSession.recordType {
-                    let gameSession = WabblerGameSession(record: record.0, scope: record.1)
-                    var player: WabblerCloudPlayer? = nil
-                    if record.0.lastModifiedUserRecordID == WabblerGameSession.localPlayerRecord!.recordID {
-                        player = WabblerGameSession.localPlayer!
-                    } else {
-                        player = gameSession.remotePlayer
-                    }
-                    guard player != nil else { return }
-                    guard let data = record.0[WabblerGameSession.keys.cachedData] as? Data else { return }
-                    DispatchQueue.main.async {
-                        delegate.session(gameSession, player: player!, didSave: data)
-                    }
-                } else {
-                    print("Non Game Session Record Update Received for database: \(record.1)")
-                    print(record.0)
-                }
-            }
-            for deletion in deletions {
-                print(deletion)
-            }
+            var transactionIsSuccessful = false
             if let error = error {
                 print("Errors:")
                 print(error)
+            } else {
+                for record in records {
+                    if record.0.recordType == WabblerGameSession.recordType {
+                        let gameSession = WabblerGameSession(record: record.0, scope: record.1)
+                        var player: WabblerCloudPlayer? = nil
+                        if record.0.lastModifiedUserRecordID == WabblerGameSession.localPlayerRecord!.recordID {
+                            player = WabblerGameSession.localPlayer!
+                            if gameSession.opponent == nil && record.1 == .shared {
+                                gameSession.opponent = player
+                            }
+                        } else {
+                            player = gameSession.remotePlayer
+                        }
+                        if player == nil, record.1 == .shared {
+                            gameSession.opponent = localPlayer
+                        }
+                        guard let data = record.0[WabblerGameSession.keys.cachedData] as? Data else { return }
+                        DispatchQueue.main.async {
+                            delegate.session(gameSession, player: player!, didSave: data)
+                        }
+                    } else if let ckShare = record.0 as? CKShare {
+                        print("Non Game Session Record Update Received for database: \(record.1)")
+                        print(ckShare)
+                    }
+                    transactionIsSuccessful = true
+                }
+                for deletion in deletions {
+                    let sessionID = deletion.0.recordName
+                    DispatchQueue.main.async {
+                        WabblerGameSession.eventListenerDelegate?.sessionWasDeleted(withIdentifier: sessionID)
+                    }
+                    transactionIsSuccessful = true
+                }
             }
+
+            completion?(transactionIsSuccessful)
         }
     }
     

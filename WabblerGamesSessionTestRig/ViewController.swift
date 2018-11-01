@@ -43,10 +43,7 @@ class ViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        WabblerGameSession.initialiseCloudKitConnection(localPlayerName: "Paul")
-        WabblerGameSession.add(listener: self)
-        manuallyJoinGameButton?.isEnabled = !GKGameSessionRigBools.joinAtStartUp
-        WabblerGameSession.stateError = { [weak self] error in
+        WabblerGameSession.stateError = { error in
             if let wabblerError = error as? WabblerGameSessionError {
                 if wabblerError == .localPlayerNotSignedIn {
                     print("Local Player Not Signed In")
@@ -56,6 +53,9 @@ class ViewController: UIViewController {
                 print(ckError)
             }
         }
+        WabblerGameSession.initialiseCloudKitConnection(localPlayerName: "Paul")
+        WabblerGameSession.add(listener: self)
+        manuallyJoinGameButton?.isEnabled = !GKGameSessionRigBools.joinAtStartUp
     }
     
     override func didReceiveMemoryWarning() {
@@ -120,44 +120,13 @@ class ViewController: UIViewController {
         }
     }
     
-//    func listSharedSessions() {
-//        WabblerGameSession.loadSharedSessions() {
-//            [weak self] (retreivedSessions, error) in
-//            if let error = error as? WabblerGameSessionError {
-//                self?.printError(error)
-//                return
-//            }
-//            myDebugPrint("******** Got sessions, count = \(retreivedSessions?.count ?? 0)")
-//
-//            if self?.sessions != nil,let retreivedSessions = retreivedSessions {
-//                self!.sessions! += retreivedSessions
-//                for gameSession in retreivedSessions {
-//                    self?.logSession(gameSession)
-//                    gameSession.loadGameData()  {
-//                        [weak self] (gameData, error) in
-//                        if let error = error as? WabblerGameSessionError {
-//                            self?.printError(error)
-//                        } else {
-//                            if let gameData = gameData {
-//                                myDebugPrint("    ******** Got data for session, \(gameData.someString)")
-//                                self?.sessionsAndData[gameSession] = gameData
-//                            }
-//                        }
-//                    }
-//                }
-//                self?.session = retreivedSessions.last
-//            }
-//        }
-//    }
-    
     @IBAction func createSession(_ sender: Any) {
-        guard WabblerGameSession.isAssured else { return }
         WabblerGameSession.createSession(withTitle: "Wabble Two Player Owned by \(signedInPlayer?.displayName ?? "Null"), id: \(signedInPlayer?.playerID?.strHash() ?? "Null")") {
             [weak self] (gameSession, error) in
             if let error = error as? WabblerGameSessionError {
                 self?.printError(error)
             } else {
-                guard WabblerGameSession.isAssured else { return } // Will call error if not assured
+                guard WabblerGameSession.assuredFromOptional() != nil else { return } // Will call error if not assured
                 myDebugPrint("******** Created session: \(gameSession?.title ?? "No title defined")")
                 myDebugPrint("    ******** Session owner: \(gameSession?.owner?.displayName ?? "Null")")
                 myDebugPrint("    ******** Session owner ID: \(gameSession?.owner?.playerID?.strHash() ?? "Null")")
@@ -188,10 +157,6 @@ class ViewController: UIViewController {
         myDebugPrint("--------------")
     }
     
-    func sessionConnectionStateError(error: Error) {
-        print(error)
-    }
-    
     func saveData(contentString: String) {
         guard let session = session else {
             myDebugPrint("Error: Session must be set-up and cached before we can save data")
@@ -217,31 +182,6 @@ class ViewController: UIViewController {
     @IBAction func saveDataToSession2(_ sender: Any) {
         saveData(contentString: "Data \"Apples\", saved by player: \(signedInPlayer?.displayName ?? "Null"), id: \(signedInPlayer?.playerID?.strHash() ?? "Null")")
     }
-    
-//    @IBAction func getSharingURL(_ sender: Any) {
-//        if let gameSession = session {
-//            gameSession.getShareURL {
-//                [weak self] (url, error) in
-//                guard let url = url else {
-//                    if let error = error as? WabblerGameSessionError {
-//                        self?.printError(error)
-//
-//                    } else if let error = error {
-//                        myDebugPrint("Error not accounted for: \(error)")
-//                    }
-//                    return
-//                }
-//
-//                let encodedChallengeURL = url.absoluteString.addingPercentEncoding(withAllowedCharacters:.urlHostAllowed)
-//                let nestedURLString = GKGameSessionRigStrings.openWabbleForPlayerChallenge + encodedChallengeURL!
-//                let nestedURL = URL(string: nestedURLString)!
-//                self?.inviteURL = nestedURL
-//                self?.inviteOpponent(withSharingURL: nestedURL)
-//                myDebugPrint("******** Retreived share URL: \(url)")
-//                myDebugPrint("Retreived encoded URL: \(nestedURL)")
-//            }
-//        }
-//    }
     
     @IBAction func shareRecord(_ sender: Any) {
         if let gameSession = session {
@@ -344,6 +284,11 @@ class ViewController: UIViewController {
 }
 
 extension ViewController: WabblerGameSessionEventListener {
+    func sessionWasDeleted(withIdentifier identifier: WabblerGameSession.ID) {
+        //self.session = session
+        myDebugPrint("###### Session with identifier: \(identifier), was deleted.")
+    }
+    
     public func session(_ session: WabblerGameSession, didAdd player: WabblerCloudPlayer) {
         //self.session = session
         myDebugPrint("###### Session: \(session.title), Did add player: \(String(describing: player.displayName)), id: \(player.playerID?.strHash() ?? "Null")")

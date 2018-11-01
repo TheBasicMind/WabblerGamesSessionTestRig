@@ -31,11 +31,20 @@ enum CloudKitConnectorStrings {
     static let sharedSubName                    = "wabbler-shared-games"
 }
 
+/**
+ Connector specific errors are only raised when
+ connecting and / or if there is a problem getting
+ assured values.
+ */
 enum CloudKitConnectorError: Error {
     case signInRequired
     case accountRestricted
     case couldNotDetermineAccountStatus
     case badState // For this one, check the failure states
+    case badICloudContainer // Either the container is bad or something is bad with cloud kit
+    case appUpdateRequired
+    case badConnectorConfiguration // For when something structural is wrong relating to our cloudkit container
+    case tryAgainLater
     case unknown
 }
 
@@ -78,8 +87,8 @@ class CloudKitConnector: AssuredState {
             print("shared db change token: \(sharedDBChangeToken?.description ?? "Nil")")
         }
     }
-    var remoteRecordUpdatedCompletion: ((CKRecord?, CKRecord.ID?, Error?)->Void)?
-    var remoteRecordDeletedCompletion: ((CKRecord.ID?, Error?)->Void)?
+    private var zoneChangeTokens: [CKRecordZone.ID: CKServerChangeToken] = [:]
+    //var databaseZoneUpdatedCompletion: (([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKDatabase.Scope)],Error?)->Void)?
     
     func assuredFromOptional() -> AssuredConnectionValues? {
         if let container = container,
@@ -105,19 +114,36 @@ class CloudKitConnector: AssuredState {
         
         CKContainer.default().accountStatus {
             status, error in
-            switch status {
-            case .available:
-                self.signedInToICloud = true
-                self.privateDatabase = container.privateCloudDatabase
-                self.sharedDatabase = container.sharedCloudDatabase
-                self.continueConnection(zoneName: zoneName)
-            case .noAccount:
-                // User not logged in to iCloud
-                self.stateError?(CloudKitConnectorError.signInRequired)
-            case .couldNotDetermine:
-                self.stateError?(CloudKitConnectorError.couldNotDetermineAccountStatus)
-            case .restricted:
-                self.stateError?(CloudKitConnectorError.accountRestricted)
+            if let error = error {
+                if let ckError = error as? CKError {
+                    switch ckError.code {
+                    case .badContainer:
+                        self.stateError?(CloudKitConnectorError.badICloudContainer)
+                    case .incompatibleVersion:
+                        self.stateError?(CloudKitConnectorError.appUpdateRequired)
+                    case .badDatabase:
+                        self.stateError?(CloudKitConnectorError.badConnectorConfiguration)
+                    case .internalError:
+                        self.stateError?(CloudKitConnectorError.tryAgainLater)
+                    default:
+                        self.stateError?(CloudKitConnectorError.unknown)
+                    }
+                }
+            } else {
+                switch status {
+                case .available:
+                    self.signedInToICloud = true
+                    self.privateDatabase = container.privateCloudDatabase
+                    self.sharedDatabase = container.sharedCloudDatabase
+                    self.continueConnection(zoneName: zoneName)
+                case .noAccount:
+                    // User not logged in to iCloud
+                    self.stateError?(CloudKitConnectorError.signInRequired)
+                case .couldNotDetermine:
+                    self.stateError?(CloudKitConnectorError.couldNotDetermineAccountStatus)
+                case .restricted:
+                    self.stateError?(CloudKitConnectorError.accountRestricted)
+                }
             }
         }
     }
@@ -249,7 +275,10 @@ class CloudKitConnector: AssuredState {
     
     /**
      Fetch changes since the last request
-     
+     Note if ANY errors are returned to allChanges, then
+     server change tokens will not have been cached
+     and making the request again will result in all
+     changes since the previous tokens to be retreived.
     */
     func fetchLatestChanges(databaseScope: CKDatabase.Scope, allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
         var changeToken: CKServerChangeToken? = nil
@@ -330,7 +359,9 @@ class CloudKitConnector: AssuredState {
         // multiple
         changesOperation.fetchDatabaseChangesCompletionBlock = {
             [weak self] newToken, more, error in
-            if changedZones.count == 0 {
+            if let error = error {
+                allChanges([],[],error)
+            } else if changedZones.count == 0 {
                 switch database.databaseScope {
                 case .private:
                     self?.privateDBChangeToken = newToken
@@ -342,18 +373,21 @@ class CloudKitConnector: AssuredState {
                 }
                 allChanges([],[],nil)
             } else {
-                self?.fetchZoneChanges(database: database, previousChangeToken: changeToken, zones: changedZones, allChanges: allChanges) // using CKFetchRecordZoneChangesOperation
+                self?.fetchZoneChanges(database: database, serverChangeToken: changeToken, zones: changedZones, allChanges: allChanges) // using CKFetchRecordZoneChangesOperation
             }
         }
         
         database.add(changesOperation)
     }
     
-    func fetchZoneChanges(database: CKDatabase, previousChangeToken: CKServerChangeToken?,zones: [CKRecordZone.ID], allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
+    /**
+     Note: On this initial implemention if ANY error is returned to allChanges, database and zone change tokens will not be updated.
+    */
+    func fetchZoneChanges(database: CKDatabase, serverChangeToken: CKServerChangeToken?, zones: [CKRecordZone.ID], allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
         var configurationsByRecordZoneID = [CKRecordZone.ID: CKFetchRecordZoneChangesOperation.ZoneConfiguration]()
         for zoneID in zones {
             let configs = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
-            configs.previousServerChangeToken = previousChangeToken
+            configs.previousServerChangeToken = zoneChangeTokens[zoneID]
                 configurationsByRecordZoneID[zoneID] = configs
         }
         let recordsOperation = CKFetchRecordZoneChangesOperation(recordZoneIDs: zones, configurationsByRecordZoneID: configurationsByRecordZoneID)
@@ -366,37 +400,39 @@ class CloudKitConnector: AssuredState {
         recordsOperation.recordWithIDWasDeletedBlock = { recordID, recordType in
             deletedRecords += [(recordID,recordType,database.databaseScope)]
         }
-        recordsOperation.recordZoneChangeTokensUpdatedBlock = { [weak self] _, serverChangeToken, _ in
+        
+        var tempZoneChangeTokens: [CKRecordZone.ID: CKServerChangeToken] = [:]
+        
+        recordsOperation.recordZoneChangeTokensUpdatedBlock = { zoneID, zoneChangeToken, _ in
             // We use this for noting change tokens due for the deletions
             // we have processed.
-            if let serverChangeToken = serverChangeToken {
-                switch database.databaseScope {
-                case .private:
-                    self?.privateDBChangeToken = serverChangeToken
-                case .shared:
-                    self?.sharedDBChangeToken = serverChangeToken
-                default:
-                    break
-                }
-            }
+            tempZoneChangeTokens[zoneID] = zoneChangeToken
         }
-        recordsOperation.recordZoneFetchCompletionBlock = { [weak self](_,serverChangeToken,_,moreComing,error) in
+        recordsOperation.recordZoneFetchCompletionBlock = { (zoneID, zoneChangeToken, _, moreComing, error) in
             // We use this for noting change tokens due for the
             // new records we have retreived
-            if let serverChangeToken = serverChangeToken {
-                switch database.databaseScope {
-                case .private:
-                    self?.privateDBChangeToken = serverChangeToken
-                case .shared:
-                    self?.sharedDBChangeToken = serverChangeToken
-                default:
-                    break
-                }
-            }
+            tempZoneChangeTokens[zoneID] = zoneChangeToken
         }
         recordsOperation.fetchRecordZoneChangesCompletionBlock = {
-            error in
-            allChanges(records,deletedRecords,error)
+            [weak self]  error in
+            if error != nil {
+                allChanges([],[],error)
+            } else {
+                if let serverChangeToken = serverChangeToken {
+                    switch database.databaseScope {
+                    case .private:
+                        self?.privateDBChangeToken = serverChangeToken
+                    case .shared:
+                        self?.sharedDBChangeToken = serverChangeToken
+                    default:
+                        break
+                    }
+                }
+                for (key, value) in tempZoneChangeTokens {
+                    self?.zoneChangeTokens[key] = value
+                }
+                allChanges(records,deletedRecords,error)
+            }
         }
         database.add(recordsOperation)
     }
@@ -567,32 +603,11 @@ class CloudKitConnector: AssuredState {
         return controller
     }
     
-    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        let dict = userInfo as! [String:NSObject]
-        let notification = CKQueryNotification(fromRemoteNotificationDictionary: dict)
-        guard let recordID = notification.recordID else { return }
-        
-        if notification.subscriptionID == CloudKitConnectorStrings.privateSubName || notification.subscriptionID == CloudKitConnectorStrings.sharedSubName {
-            switch notification.queryNotificationReason {
-            case .recordUpdated:
-                loadRecord(recordID, scope:notification.databaseScope, completion: nil)
-            case .recordDeleted:
-                remoteRecordDeleted(recordID, scope:notification.databaseScope)
-            default:
-                print("do nothing")
-            }
-        }
-    }
-    
-    func remoteRecordDeleted(_ recordID: CKRecord.ID, scope: CKDatabase.Scope) {
-        remoteRecordDeletedCompletion?(recordID, nil)
-    }
-    
     func acceptShare(shareMetaData:CKShare.Metadata) {
         let accept = CKAcceptSharesOperation(shareMetadatas: [shareMetaData])
         accept.perShareCompletionBlock = {
             metaData, share, error in
-            
+            print(error)
         }
         CKContainer(identifier: shareMetaData.containerIdentifier).add(accept)
     }
