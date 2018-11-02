@@ -289,18 +289,8 @@ extension ViewController: WabblerGameSessionEventListener {
         myDebugPrint("###### Session with identifier: \(identifier), was deleted.")
     }
     
-    public func session(_ session: WabblerGameSession, didAdd player: WabblerCloudPlayer) {
-        //self.session = session
-        myDebugPrint("###### Session: \(session.title), Did add player: \(String(describing: player.displayName)), id: \(player.playerID?.strHash() ?? "Null")")
-    }
-    
-    public func session(_ session: WabblerGameSession, didRemove player: WabblerCloudPlayer) {
-        //self.session = session
-        myDebugPrint("###### Did remove player: \(player.displayName ?? "Null")")
-        myDebugPrint("Session owner: \(session.owner?.displayName ?? "Null")")
-    }
-    
     public func session(_ session: WabblerGameSession, player: WabblerCloudPlayer, didSave data: Data) {
+        self.session = session
         let decoder = JSONDecoder()
         let gameData: GameData
         do {
@@ -310,12 +300,6 @@ extension ViewController: WabblerGameSessionEventListener {
             return
         }
         myDebugPrint("###### Player: \(player.displayName ?? "Name is Null"), id: \(player.playerID?.strHash() ?? "Null"), did save data: \(gameData.someString)")
-    }
-    
-    public func session(_ session: WabblerGameSession, didReceiveMessage message: String, with data: Data, from player: WabblerCloudPlayer) {
-        //self.session = session
-        myDebugPrint("Message received from player: \(player)")
-        myDebugPrint(message)
     }
 }
 

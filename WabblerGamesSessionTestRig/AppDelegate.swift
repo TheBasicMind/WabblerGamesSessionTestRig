@@ -44,6 +44,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         if let notification = CKDatabaseNotification(fromRemoteNotificationDictionary: userInfo) as? CKDatabaseNotification {
+            print(notification)
             WabblerGameSession.updateForChanges(databaseScope: notification.databaseScope) { (recordsObtained) in
                 completionHandler(recordsObtained ? .newData : .noData)
             }

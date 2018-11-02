@@ -68,10 +68,10 @@ protocol WabblerGameSessionEventListener {
     /**
      When called, the session record has the local player added but has not yet been saved back to the server
     */
-    func session(_ session: WabblerGameSession, didAdd player: WabblerCloudPlayer)
-    func sessionWasDeleted(withIdentifier: WabblerGameSession.ID)
-    func session(_ session: WabblerGameSession, didReceiveMessage message: String, with data: Data, from player: WabblerCloudPlayer)
+    //func session(_ session: WabblerGameSession, didAdd player: WabblerCloudPlayer)
     func session(_ session: WabblerGameSession, player: WabblerCloudPlayer, didSave data: Data)
+    func sessionWasDeleted(withIdentifier: WabblerGameSession.ID)
+    //func session(_ session: WabblerGameSession, didReceiveMessage message: String, with data: Data, from player: WabblerCloudPlayer)
 }
 
 class WabblerGameSession {
@@ -248,12 +248,11 @@ class WabblerGameSession {
         newSession?.owner = WabblerGameSession.localPlayer!
         
         CloudKitConnector.sharedConnector.save(record: newSession!.record, scope: .private) { (record, error) in
-            let modSession = record != nil ? newSession : nil
             if let record = record {
-                modSession?.record = record
+                newSession?.record = record
             }
             DispatchQueue.main.async {
-                completionHandler(modSession, error)
+                completionHandler(record != nil ? newSession : nil, error)
             }
         }
     }
@@ -431,10 +430,6 @@ class WabblerGameSession {
                         } else {
                             if gameSession.opponent == nil, record.1 == .shared {
                                 gameSession.opponent = localPlayer
-                                DispatchQueue.main.async {
-                                    WabblerGameSession.eventListenerDelegate?.session(gameSession, didAdd: localPlayer!)
-                                }
-                                return
                             }
                             player = gameSession.remotePlayer
                         }
@@ -463,6 +458,11 @@ class WabblerGameSession {
         }
     }
     
+    /**
+     Whenever this call is made we should also
+     check for any session deletions by comparing
+     with any existing array / list of sessions.
+    */
     static func loadSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
         guard CloudKitConnector.sharedConnector.assuredFromOptional() != nil else { return }
         var sessions = [WabblerGameSession]()

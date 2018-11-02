@@ -76,6 +76,7 @@ class CloudKitConnector: AssuredState {
     var sharedDatabase: CKDatabase?
     var privateZone: CKRecordZone?
     var sharedZones: [CKRecordZone]?
+    var recordZones: [CKRecordZone:[CKRecord.ID]] = [:] // We need this for tracking when the final record is deleted from a zone in the sharedDB
     // End Assured properties
     private var privateDBChangeToken: CKServerChangeToken? {
         didSet {
@@ -216,7 +217,7 @@ class CloudKitConnector: AssuredState {
         let subscription = CKDatabaseSubscription(subscriptionID: subscriptionId)
         
         let notificationInfo = CKSubscription.NotificationInfo()
-        //notificationInfo.shouldSendContentAvailable = true
+        notificationInfo.shouldSendContentAvailable = true
         notificationInfo.alertBody = "This is the alert body text."
         subscription.notificationInfo = notificationInfo
         
@@ -325,6 +326,7 @@ class CloudKitConnector: AssuredState {
         changesOperation.fetchAllChanges = true
         changesOperation.qualityOfService = .userInitiated
         var changedZones = [CKRecordZone.ID]()
+        var deletedZones = [CKRecordZone.ID]()
         changesOperation.recordZoneWithIDChangedBlock = { rzid in
             // This is the information for the zones that
             // have changed records (note it doesn't justify
@@ -337,7 +339,7 @@ class CloudKitConnector: AssuredState {
             // with these on the local client, we need a new
             // server change token once we are finished - which
             // is given in the next block.
-            
+            deletedZones += [rzid]
         }
         
         changesOperation.changeTokenUpdatedBlock = { [weak self] newToken in
@@ -361,17 +363,6 @@ class CloudKitConnector: AssuredState {
             [weak self] newToken, more, error in
             if let error = error {
                 allChanges([],[],error)
-            } else if changedZones.count == 0 {
-                switch database.databaseScope {
-                case .private:
-                    self?.privateDBChangeToken = newToken
-                case .shared:
-                    self?.sharedDBChangeToken = newToken
-                default:
-                    // Do nothing
-                    break
-                }
-                allChanges([],[],nil)
             } else {
                 self?.fetchZoneChanges(database: database, serverChangeToken: changeToken, zones: changedZones, allChanges: allChanges) // using CKFetchRecordZoneChangesOperation
             }
@@ -387,7 +378,7 @@ class CloudKitConnector: AssuredState {
         var configurationsByRecordZoneID = [CKRecordZone.ID: CKFetchRecordZoneChangesOperation.ZoneConfiguration]()
         for zoneID in zones {
             let configs = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
-            configs.previousServerChangeToken = zoneChangeTokens[zoneID]
+            configs.previousServerChangeToken = serverChangeToken == nil ? nil : zoneChangeTokens[zoneID]
                 configurationsByRecordZoneID[zoneID] = configs
         }
         let recordsOperation = CKFetchRecordZoneChangesOperation(recordZoneIDs: zones, configurationsByRecordZoneID: configurationsByRecordZoneID)
@@ -581,7 +572,7 @@ class CloudKitConnector: AssuredState {
      If the record has already been
      shared, this method returns nil.
     */
-    func shareRecord(_ record: CKRecord)->UICloudSharingController? {
+    func   shareRecord(_ record: CKRecord)->UICloudSharingController? {
         guard let av = assuredFromOptional() else { return nil }
         if record.share != nil {
             // Already shared
