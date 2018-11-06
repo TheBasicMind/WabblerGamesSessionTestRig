@@ -289,6 +289,13 @@ extension ViewController: WabblerGameSessionEventListener {
         myDebugPrint("###### Session with identifier: \(identifier), was deleted.")
     }
     
+    
+    public func session(_ session: WabblerGameSession, didRemove player: WabblerCloudPlayer) {
+        //self.session = session
+        myDebugPrint("###### Did remove player: \(player.displayName ?? "Null")")
+        myDebugPrint("Session owner: \(session.owner?.displayName ?? "Null")")
+    }
+    
     public func session(_ session: WabblerGameSession, player: WabblerCloudPlayer, didSave data: Data) {
         self.session = session
         let decoder = JSONDecoder()

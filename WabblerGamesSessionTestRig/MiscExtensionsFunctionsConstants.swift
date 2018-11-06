@@ -20,10 +20,6 @@ func myDebugPrint(_ string: String) {
     print(string)
 }
 
-enum GKGameSessionRigStrings {
-    static let cloudKitContainer                  = "iCloud.radicalfraction.GKGameSessionTestRig"
-    static let openWabbleForPlayerChallenge        = "newOWTestGameRequest://?token="
-}
 enum GKGameSessionAPI {
     static let versionNo                        = 1
 }

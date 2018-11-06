@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		09CBF3522191B69900467C3A /* WabblerGameKitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09CBF3512191B69900467C3A /* WabblerGameKitTests.swift */; };
+		09CBF3542191B69900467C3A /* WabblerGameKit.h in Headers */ = {isa = PBXBuildFile; fileRef = 09CBF3442191B69900467C3A /* WabblerGameKit.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		09CBF3602191B7E300467C3A /* CloudKitConnector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA4B2174A19900AD11E2 /* CloudKitConnector.swift */; };
+		09CBF3612191B7E800467C3A /* WabblerGameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA4A2174A19900AD11E2 /* WabblerGameSession.swift */; };
+		09CBF3622191B7EC00467C3A /* Storage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 092C3E49218DD3BD007EEF99 /* Storage.swift */; };
+		09CBF3632191B7F200467C3A /* StorageExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 092C3E4A218DD3BE007EEF99 /* StorageExtensions.swift */; };
+		09CBF3652191BA0A00467C3A /* WabblerGameSessionGameDataExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09CBF3642191BA0A00467C3A /* WabblerGameSessionGameDataExtension.swift */; };
+		09CBF3662191BAE300467C3A /* WabblerGameKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09CBF3422191B69900467C3A /* WabblerGameKit.framework */; };
 		09D2CA27217496A800AD11E2 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA26217496A800AD11E2 /* AppDelegate.swift */; };
 		09D2CA29217496A800AD11E2 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA28217496A800AD11E2 /* ViewController.swift */; };
 		09D2CA2E217496AA00AD11E2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 09D2CA2D217496AA00AD11E2 /* Assets.xcassets */; };
@@ -14,12 +22,31 @@
 		09D2CA3C217496AA00AD11E2 /* WabblerGamesSessionTestRigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA3B217496AA00AD11E2 /* WabblerGamesSessionTestRigTests.swift */; };
 		09D2CA472174A08E00AD11E2 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 09D2CA462174A08100AD11E2 /* Main.storyboard */; };
 		09D2CA492174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA482174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift */; };
-		09D2CA4C2174A19900AD11E2 /* WabblerGameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA4A2174A19900AD11E2 /* WabblerGameSession.swift */; };
-		09D2CA4D2174A19900AD11E2 /* CloudKitConnector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA4B2174A19900AD11E2 /* CloudKitConnector.swift */; };
 		09D2CA512176278700AD11E2 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09D2CA502176278700AD11E2 /* CloudKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		09CBF34C2191B69900467C3A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 09D2CA1B217496A800AD11E2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 09CBF3412191B69900467C3A;
+			remoteInfo = WabblerGameKit;
+		};
+		09CBF34E2191B69900467C3A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 09D2CA1B217496A800AD11E2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 09D2CA22217496A800AD11E2;
+			remoteInfo = WabblerGamesSessionTestRig;
+		};
+		09CBF3552191B69900467C3A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 09D2CA1B217496A800AD11E2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 09CBF3412191B69900467C3A;
+			remoteInfo = WabblerGameKit;
+		};
 		09D2CA38217496AA00AD11E2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 09D2CA1B217496A800AD11E2 /* Project object */;
@@ -29,7 +56,29 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		09CBF35E2191B69900467C3A /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		092C3E49218DD3BD007EEF99 /* Storage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Storage.swift; sourceTree = "<group>"; };
+		092C3E4A218DD3BE007EEF99 /* StorageExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageExtensions.swift; sourceTree = "<group>"; };
+		09CBF3422191B69900467C3A /* WabblerGameKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WabblerGameKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		09CBF3442191B69900467C3A /* WabblerGameKit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WabblerGameKit.h; sourceTree = "<group>"; };
+		09CBF3452191B69900467C3A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		09CBF34A2191B69900467C3A /* WabblerGameKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WabblerGameKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		09CBF3512191B69900467C3A /* WabblerGameKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WabblerGameKitTests.swift; sourceTree = "<group>"; };
+		09CBF3532191B69900467C3A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		09CBF3642191BA0A00467C3A /* WabblerGameSessionGameDataExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WabblerGameSessionGameDataExtension.swift; sourceTree = "<group>"; };
 		09D2CA23217496A800AD11E2 /* WabblerGamesSessionTestRig.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WabblerGamesSessionTestRig.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		09D2CA26217496A800AD11E2 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		09D2CA28217496A800AD11E2 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
@@ -48,10 +97,25 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		09CBF33F2191B69900467C3A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		09CBF3472191B69900467C3A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		09D2CA20217496A800AD11E2 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				09CBF3662191BAE300467C3A /* WabblerGameKit.framework in Frameworks */,
 				09D2CA512176278700AD11E2 /* CloudKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -66,11 +130,31 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		09CBF3432191B69900467C3A /* WabblerGameKit */ = {
+			isa = PBXGroup;
+			children = (
+				09CBF3442191B69900467C3A /* WabblerGameKit.h */,
+				09CBF3452191B69900467C3A /* Info.plist */,
+			);
+			path = WabblerGameKit;
+			sourceTree = "<group>";
+		};
+		09CBF3502191B69900467C3A /* WabblerGameKitTests */ = {
+			isa = PBXGroup;
+			children = (
+				09CBF3512191B69900467C3A /* WabblerGameKitTests.swift */,
+				09CBF3532191B69900467C3A /* Info.plist */,
+			);
+			path = WabblerGameKitTests;
+			sourceTree = "<group>";
+		};
 		09D2CA1A217496A800AD11E2 = {
 			isa = PBXGroup;
 			children = (
 				09D2CA25217496A800AD11E2 /* WabblerGamesSessionTestRig */,
 				09D2CA3A217496AA00AD11E2 /* WabblerGamesSessionTestRigTests */,
+				09CBF3432191B69900467C3A /* WabblerGameKit */,
+				09CBF3502191B69900467C3A /* WabblerGameKitTests */,
 				09D2CA24217496A800AD11E2 /* Products */,
 				09D2CA4F2176278700AD11E2 /* Frameworks */,
 			);
@@ -81,6 +165,8 @@
 			children = (
 				09D2CA23217496A800AD11E2 /* WabblerGamesSessionTestRig.app */,
 				09D2CA37217496AA00AD11E2 /* WabblerGamesSessionTestRigTests.xctest */,
+				09CBF3422191B69900467C3A /* WabblerGameKit.framework */,
+				09CBF34A2191B69900467C3A /* WabblerGameKitTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -94,6 +180,9 @@
 				09D2CA482174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift */,
 				09D2CA4B2174A19900AD11E2 /* CloudKitConnector.swift */,
 				09D2CA4A2174A19900AD11E2 /* WabblerGameSession.swift */,
+				09CBF3642191BA0A00467C3A /* WabblerGameSessionGameDataExtension.swift */,
+				092C3E49218DD3BD007EEF99 /* Storage.swift */,
+				092C3E4A218DD3BE007EEF99 /* StorageExtensions.swift */,
 				09D2CA462174A08100AD11E2 /* Main.storyboard */,
 				09D2CA2D217496AA00AD11E2 /* Assets.xcassets */,
 				09D2CA2F217496AA00AD11E2 /* LaunchScreen.storyboard */,
@@ -121,7 +210,55 @@
 		};
 /* End PBXGroup section */
 
+/* Begin PBXHeadersBuildPhase section */
+		09CBF33D2191B69900467C3A /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				09CBF3542191B69900467C3A /* WabblerGameKit.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
 /* Begin PBXNativeTarget section */
+		09CBF3412191B69900467C3A /* WabblerGameKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 09CBF35D2191B69900467C3A /* Build configuration list for PBXNativeTarget "WabblerGameKit" */;
+			buildPhases = (
+				09CBF33D2191B69900467C3A /* Headers */,
+				09CBF33E2191B69900467C3A /* Sources */,
+				09CBF33F2191B69900467C3A /* Frameworks */,
+				09CBF3402191B69900467C3A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WabblerGameKit;
+			productName = WabblerGameKit;
+			productReference = 09CBF3422191B69900467C3A /* WabblerGameKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		09CBF3492191B69900467C3A /* WabblerGameKitTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 09CBF35F2191B69900467C3A /* Build configuration list for PBXNativeTarget "WabblerGameKitTests" */;
+			buildPhases = (
+				09CBF3462191B69900467C3A /* Sources */,
+				09CBF3472191B69900467C3A /* Frameworks */,
+				09CBF3482191B69900467C3A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				09CBF34D2191B69900467C3A /* PBXTargetDependency */,
+				09CBF34F2191B69900467C3A /* PBXTargetDependency */,
+			);
+			name = WabblerGameKitTests;
+			productName = WabblerGameKitTests;
+			productReference = 09CBF34A2191B69900467C3A /* WabblerGameKitTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		09D2CA22217496A800AD11E2 /* WabblerGamesSessionTestRig */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 09D2CA40217496AA00AD11E2 /* Build configuration list for PBXNativeTarget "WabblerGamesSessionTestRig" */;
@@ -129,10 +266,12 @@
 				09D2CA1F217496A800AD11E2 /* Sources */,
 				09D2CA20217496A800AD11E2 /* Frameworks */,
 				09D2CA21217496A800AD11E2 /* Resources */,
+				09CBF35E2191B69900467C3A /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				09CBF3562191B69900467C3A /* PBXTargetDependency */,
 			);
 			name = WabblerGamesSessionTestRig;
 			productName = WabblerGamesSessionTestRig;
@@ -163,10 +302,17 @@
 		09D2CA1B217496A800AD11E2 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastSwiftUpdateCheck = 1000;
+				LastSwiftUpdateCheck = 1010;
 				LastUpgradeCheck = 1000;
 				ORGANIZATIONNAME = PaulLancefield;
 				TargetAttributes = {
+					09CBF3412191B69900467C3A = {
+						CreatedOnToolsVersion = 10.1;
+					};
+					09CBF3492191B69900467C3A = {
+						CreatedOnToolsVersion = 10.1;
+						TestTargetID = 09D2CA22217496A800AD11E2;
+					};
 					09D2CA22217496A800AD11E2 = {
 						CreatedOnToolsVersion = 10.0;
 						SystemCapabilities = {
@@ -202,11 +348,27 @@
 			targets = (
 				09D2CA22217496A800AD11E2 /* WabblerGamesSessionTestRig */,
 				09D2CA36217496AA00AD11E2 /* WabblerGamesSessionTestRigTests */,
+				09CBF3412191B69900467C3A /* WabblerGameKit */,
+				09CBF3492191B69900467C3A /* WabblerGameKitTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		09CBF3402191B69900467C3A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		09CBF3482191B69900467C3A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		09D2CA21217496A800AD11E2 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -227,12 +389,30 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		09CBF33E2191B69900467C3A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				09CBF3612191B7E800467C3A /* WabblerGameSession.swift in Sources */,
+				09CBF3602191B7E300467C3A /* CloudKitConnector.swift in Sources */,
+				09CBF3622191B7EC00467C3A /* Storage.swift in Sources */,
+				09CBF3632191B7F200467C3A /* StorageExtensions.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		09CBF3462191B69900467C3A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				09CBF3522191B69900467C3A /* WabblerGameKitTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		09D2CA1F217496A800AD11E2 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				09D2CA4D2174A19900AD11E2 /* CloudKitConnector.swift in Sources */,
-				09D2CA4C2174A19900AD11E2 /* WabblerGameSession.swift in Sources */,
+				09CBF3652191BA0A00467C3A /* WabblerGameSessionGameDataExtension.swift in Sources */,
 				09D2CA29217496A800AD11E2 /* ViewController.swift in Sources */,
 				09D2CA492174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift in Sources */,
 				09D2CA27217496A800AD11E2 /* AppDelegate.swift in Sources */,
@@ -250,6 +430,21 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		09CBF34D2191B69900467C3A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 09CBF3412191B69900467C3A /* WabblerGameKit */;
+			targetProxy = 09CBF34C2191B69900467C3A /* PBXContainerItemProxy */;
+		};
+		09CBF34F2191B69900467C3A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 09D2CA22217496A800AD11E2 /* WabblerGamesSessionTestRig */;
+			targetProxy = 09CBF34E2191B69900467C3A /* PBXContainerItemProxy */;
+		};
+		09CBF3562191B69900467C3A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 09CBF3412191B69900467C3A /* WabblerGameKit */;
+			targetProxy = 09CBF3552191B69900467C3A /* PBXContainerItemProxy */;
+		};
 		09D2CA39217496AA00AD11E2 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 09D2CA22217496A800AD11E2 /* WabblerGamesSessionTestRig */;
@@ -269,6 +464,106 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		09CBF3592191B69900467C3A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = VWC6QT4FC9;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INFOPLIST_FILE = WabblerGameKit/Info.plist;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mrlancefieldgames.WabblerGameKit;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 4.2;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		09CBF35A2191B69900467C3A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = VWC6QT4FC9;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INFOPLIST_FILE = WabblerGameKit/Info.plist;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mrlancefieldgames.WabblerGameKit;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 4.2;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
+		09CBF35B2191B69900467C3A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = VWC6QT4FC9;
+				INFOPLIST_FILE = WabblerGameKitTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mrlancefieldgames.WabblerGameKitTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 4.2;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WabblerGamesSessionTestRig.app/WabblerGamesSessionTestRig";
+			};
+			name = Debug;
+		};
+		09CBF35C2191B69900467C3A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = VWC6QT4FC9;
+				INFOPLIST_FILE = WabblerGameKitTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mrlancefieldgames.WabblerGameKitTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 4.2;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WabblerGamesSessionTestRig.app/WabblerGamesSessionTestRig";
+			};
+			name = Release;
+		};
 		09D2CA3E217496AA00AD11E2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -470,6 +765,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		09CBF35D2191B69900467C3A /* Build configuration list for PBXNativeTarget "WabblerGameKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				09CBF3592191B69900467C3A /* Debug */,
+				09CBF35A2191B69900467C3A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		09CBF35F2191B69900467C3A /* Build configuration list for PBXNativeTarget "WabblerGameKitTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				09CBF35B2191B69900467C3A /* Debug */,
+				09CBF35C2191B69900467C3A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		09D2CA1E217496A800AD11E2 /* Build configuration list for PBXProject "WabblerGamesSessionTestRig" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

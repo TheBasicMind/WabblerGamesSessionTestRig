@@ -45,6 +45,8 @@ enum CloudKitConnectorError: Error {
     case appUpdateRequired
     case badConnectorConfiguration // For when something structural is wrong relating to our cloudkit container
     case tryAgainLater
+    case recordNotShared
+    case publicDatabaseUnavailable
     case unknown
 }
 
@@ -59,7 +61,7 @@ enum DatabaseVisibility {
  for Wabbler interaction with CloudKit
  working in a single named zone and
  assuming the default container is
- used.
+ used. 
  */
 class CloudKitConnector: AssuredState {
     typealias OptionalValueType = CloudKitConnector
@@ -76,7 +78,6 @@ class CloudKitConnector: AssuredState {
     var sharedDatabase: CKDatabase?
     var privateZone: CKRecordZone?
     var sharedZones: [CKRecordZone]?
-    var recordZones: [CKRecordZone:[CKRecord.ID]] = [:] // We need this for tracking when the final record is deleted from a zone in the sharedDB
     // End Assured properties
     private var privateDBChangeToken: CKServerChangeToken? {
         didSet {
@@ -89,7 +90,6 @@ class CloudKitConnector: AssuredState {
         }
     }
     private var zoneChangeTokens: [CKRecordZone.ID: CKServerChangeToken] = [:]
-    //var databaseZoneUpdatedCompletion: (([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKDatabase.Scope)],Error?)->Void)?
     
     func assuredFromOptional() -> AssuredConnectionValues? {
         if let container = container,
@@ -258,17 +258,25 @@ class CloudKitConnector: AssuredState {
      are a delta from the point this request
      is made will be received after this
      request is made.
+     
+     Note: It is possible the private database
+     request will succeed but the shared database
+     request will fail. In this case, the private
+     database records (e.g. any records received)
+     should be cached or things will get out of
+     sync with the change tokens.
      */
-    func fetchRecords(allRecords: @escaping ([(CKRecord,CKDatabase.Scope)], Error?)->Void) {
+    func fetchRecords(completion: @escaping ([(CKRecord,CKDatabase.Scope)], Error?)->Void) {
         guard let av = assuredFromOptional() else { return }
-        fetchChanges(database: av.privateDatabase,changeToken: nil) { [weak self](records, deletions, error) in
+        
+        fetchChanges(database: av.privateDatabase,changeToken: nil) { [weak self](records, deletions, allRecords, error) in
             var zippedRecords:[(CKRecord,CKDatabase.Scope)] = records.map { ($0.0, .private) }
             if let error = error {
-                allRecords(zippedRecords,error)
+                completion(zippedRecords,error)
             } else {
-                self?.fetchChanges(database: av.sharedDatabase, changeToken: nil) { (records, deletions, error) in
+                self?.fetchChanges(database: av.sharedDatabase, changeToken: nil) { (records, deletions, allRecords, error) in
                     zippedRecords += records.map { ($0.0, .shared) }
-                    allRecords(zippedRecords,error)
+                    completion(zippedRecords,error)
                 }
             }
         }
@@ -280,8 +288,14 @@ class CloudKitConnector: AssuredState {
      server change tokens will not have been cached
      and making the request again will result in all
      changes since the previous tokens to be retreived.
+     - parameter databaseScope: The scope of the database we are fetching changes from
+     - parameter completion: The completion block
+        - An array of (CKRecord, CKDatabaseScope) tupples with record fetch results
+        - An array of tupples containing Record IDs and Record Types and Database Scope for deletions performed since the last fetch
+        - A bool indicating if the fetch was for the entire record set for the given database scope
+        - An error object indicating if any errors have been encountered on the way
     */
-    func fetchLatestChanges(databaseScope: CKDatabase.Scope, allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
+    func fetchLatestChanges(databaseScope: CKDatabase.Scope, completion: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Bool, Error?)->Void) {
         var changeToken: CKServerChangeToken? = nil
         switch databaseScope {
         case .private:
@@ -291,14 +305,14 @@ class CloudKitConnector: AssuredState {
         default:
             return
         }
-        fetchChanges(databaseScope: databaseScope, changeToken: changeToken, allChanges: allChanges)
+        fetchChanges(databaseScope: databaseScope, changeToken: changeToken, completion: completion)
     }
     
     /**
      Fetch changes since supplied change token
      or all changes if no change token is supplied
      */
-    func fetchChanges(databaseScope: CKDatabase.Scope, changeToken: CKServerChangeToken?, allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
+    func fetchChanges(databaseScope: CKDatabase.Scope, changeToken: CKServerChangeToken?, completion: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Bool, Error?)->Void) {
         guard let av = assuredFromOptional() else { return }
         let database: CKDatabase
         switch databaseScope {
@@ -310,7 +324,7 @@ class CloudKitConnector: AssuredState {
             return
         }
         
-        fetchChanges(database: database, changeToken: changeToken, allChanges: allChanges)
+        fetchChanges(database: database, changeToken: changeToken, completion: completion)
     }
 
     
@@ -320,7 +334,7 @@ class CloudKitConnector: AssuredState {
      nil is passed for the change token, fetches
      all records.
      */
-    private func fetchChanges(database: CKDatabase, changeToken: CKServerChangeToken?, allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
+    private func fetchChanges(database: CKDatabase, changeToken: CKServerChangeToken?, completion: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Bool, Error?)->Void) {
         
         let changesOperation = CKFetchDatabaseChangesOperation(previousServerChangeToken: changeToken) // Nil simply fetches all zones
         changesOperation.fetchAllChanges = true
@@ -334,6 +348,7 @@ class CloudKitConnector: AssuredState {
             changedZones += [rzid]
         }
         
+        var deletedZoneRecords = [CKRecord.ID]()
         changesOperation.recordZoneWithIDWasDeletedBlock = { rzid in
             // Deal with zone deletion. Since we are dealing
             // with these on the local client, we need a new
@@ -362,9 +377,9 @@ class CloudKitConnector: AssuredState {
         changesOperation.fetchDatabaseChangesCompletionBlock = {
             [weak self] newToken, more, error in
             if let error = error {
-                allChanges([],[],error)
+                completion([],[], changeToken == nil ,error)
             } else {
-                self?.fetchZoneChanges(database: database, serverChangeToken: changeToken, zones: changedZones, allChanges: allChanges) // using CKFetchRecordZoneChangesOperation
+                self?.fetchZoneChanges(database: database, serverChangeToken: changeToken, zones: changedZones, completion: completion) // using CKFetchRecordZoneChangesOperation
             }
         }
         
@@ -374,7 +389,7 @@ class CloudKitConnector: AssuredState {
     /**
      Note: On this initial implemention if ANY error is returned to allChanges, database and zone change tokens will not be updated.
     */
-    func fetchZoneChanges(database: CKDatabase, serverChangeToken: CKServerChangeToken?, zones: [CKRecordZone.ID], allChanges: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Error?)->Void) {
+    func fetchZoneChanges(database: CKDatabase, serverChangeToken: CKServerChangeToken?, zones: [CKRecordZone.ID], completion: @escaping ([(CKRecord,CKDatabase.Scope)],[(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)], Bool, Error?)->Void) {
         var configurationsByRecordZoneID = [CKRecordZone.ID: CKFetchRecordZoneChangesOperation.ZoneConfiguration]()
         for zoneID in zones {
             let configs = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
@@ -387,6 +402,7 @@ class CloudKitConnector: AssuredState {
         var deletedRecords = [(CKRecord.ID,CKRecord.RecordType,CKDatabase.Scope)]()
         recordsOperation.recordChangedBlock = { record in
             records += [(record,database.databaseScope)]
+            //CloudKitConnector.sharedConnector.recordsInZones
         }
         recordsOperation.recordWithIDWasDeletedBlock = { recordID, recordType in
             deletedRecords += [(recordID,recordType,database.databaseScope)]
@@ -397,17 +413,23 @@ class CloudKitConnector: AssuredState {
         recordsOperation.recordZoneChangeTokensUpdatedBlock = { zoneID, zoneChangeToken, _ in
             // We use this for noting change tokens due for the deletions
             // we have processed.
+            
+            // cache record changes to disk
+            
             tempZoneChangeTokens[zoneID] = zoneChangeToken
         }
         recordsOperation.recordZoneFetchCompletionBlock = { (zoneID, zoneChangeToken, _, moreComing, error) in
             // We use this for noting change tokens due for the
             // new records we have retreived
+            
+            // cache record changes to disk
+            
             tempZoneChangeTokens[zoneID] = zoneChangeToken
         }
         recordsOperation.fetchRecordZoneChangesCompletionBlock = {
             [weak self]  error in
             if error != nil {
-                allChanges([],[],error)
+                completion([],[], serverChangeToken == nil, error)
             } else {
                 if let serverChangeToken = serverChangeToken {
                     switch database.databaseScope {
@@ -422,7 +444,7 @@ class CloudKitConnector: AssuredState {
                 for (key, value) in tempZoneChangeTokens {
                     self?.zoneChangeTokens[key] = value
                 }
-                allChanges(records,deletedRecords,error)
+                completion(records, deletedRecords, serverChangeToken == nil, error)
             }
         }
         database.add(recordsOperation)
@@ -459,48 +481,55 @@ class CloudKitConnector: AssuredState {
         -  record: The record we attempted to save
         -  error: If there was an error saving it is returned here
     */
-    func save(record: CKRecord, scope: CKDatabase.Scope, completion:((CKRecord?, Error?)->Void)?) {
-        modify(record: record, recordID: nil, scope: scope, saveCompletion: completion, deleteCompletion: nil)
+    func save(record: CKRecord, scope: CKDatabase.Scope, completion:(([CKRecord]?, Error?)->Void)?) {
+        modify(records: [record], recordID: nil, scope: scope, saveCompletion: completion, deleteCompletion: nil)
     }
     
     func delete(recordID: CKRecord.ID, completion:((CKRecord.ID?, Error?)->Void)?) {
-        modify(record: nil, recordID: recordID, scope:.private ,saveCompletion: nil, deleteCompletion: completion)
+        modify(records: nil, recordID: recordID, scope:.private ,saveCompletion: nil, deleteCompletion: completion)
     }
 
     /**
      Modify a single cloud kit record.
+     
      If modifying a record, supply record and save a completion handler
+     
      If deleting a record, supply a record and delete completion handler.
      
      If there is an error modifying the record, the save completion handler will return
      the original record we attempted to save. Do not immediately exexute a query for the
      saved record in the save completion block because server indexing of the records
      will probably not have completed and the record may not be found.
+     - parameter record: the Cloud Kit record to modify
+     - parameter recordID: The ID of the cloud kit record to be deleted
+     - parameter scope: The database scope
+     - parameter saveCompletion: The completion handler for once the record has saved. Returns an error if the record is not saved
+        -  record1: The record we attempted to save
+        -  record2: The record as saved to the server
+        -  error: If there was an error saving it is returned here
      
-     - parameter saveCompletion: The completion handler for once the record has saved. Returns an error if the record is not saved.
-     -  record1: The record we attempted to save
-     -  record2: The record as saved to the server
-     -  error: If there was an error saving it is returned here
+     - parameter deleteCompletion: The completion handler for when record IDs have been provided
     */
-    func modify(record: CKRecord?, recordID: CKRecord.ID?, scope: CKDatabase.Scope, saveCompletion:((CKRecord?, Error?)->Void)?, deleteCompletion: ((CKRecord.ID?, Error?)->Void)?) {
+    func modify(records: [CKRecord]?, recordID: CKRecord.ID?, scope: CKDatabase.Scope, saveCompletion:(([CKRecord]?, Error?)->Void)?, deleteCompletion: ((CKRecord.ID?, Error?)->Void)?) {
         guard let av = assuredFromOptional() else { return }
-        var recordsToSave: [CKRecord]? = nil
+        guard (records == nil) != (recordID == nil) else { return }
+        guard (records != nil) == (saveCompletion != nil) else { return }
+        guard (recordID != nil) == (deleteCompletion != nil) else { return }
+        
         var recordsToDelete: [CKRecord.ID]? = nil
-        if let record = record {
-            recordsToSave = [record]
-        }
+
         if let recordID = recordID {
             recordsToDelete = [recordID]
         }
-        let modOp = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: recordsToDelete)
+        let modOp = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: recordsToDelete)
         let configuration = CKOperation.Configuration()
         configuration.qualityOfService = .userInitiated
         modOp.configuration = configuration
 
+        var modifiedRecords: [CKRecord] = []
         modOp.perRecordCompletionBlock = {
             record, error in
-            saveCompletion?(record,error)
-            modOp.modifyRecordsCompletionBlock = nil
+            modifiedRecords += [record]
         }
         
         modOp.modifyRecordsCompletionBlock = {
@@ -512,13 +541,13 @@ class CloudKitConnector: AssuredState {
                 
                 if let record = records?.first {
                     let saveError = errorDict[record.recordID] as? Error
-                    saveCompletion?(record,saveError)
+                    saveCompletion?(records,saveError)
                 } else if let recordID = recordIDs?.first {
                     let saveError = errorDict[recordID] as? Error
                     deleteCompletion?(recordID,saveError)
                 } else {
                     if let saveCompletion = saveCompletion {
-                        saveCompletion(record, CloudKitConnectorError.unknown)
+                        saveCompletion(modifiedRecords, CloudKitConnectorError.unknown)
                     }
                     if let deleteCompletion = deleteCompletion {
                         deleteCompletion(recordID, CloudKitConnectorError.unknown)
@@ -529,7 +558,7 @@ class CloudKitConnector: AssuredState {
                     // Even though no error, still an unknown error has occured because
                     // otherwise we would have nulified this completion block in the previous
                     // block
-                    saveCompletion(record,  CloudKitConnectorError.unknown)
+                    saveCompletion(modifiedRecords,  CloudKitConnectorError.unknown)
                 }
                 if let deleteCompletion = deleteCompletion {
                     if let recordID = recordIDs?.first {
@@ -572,7 +601,7 @@ class CloudKitConnector: AssuredState {
      If the record has already been
      shared, this method returns nil.
     */
-    func   shareRecord(_ record: CKRecord)->UICloudSharingController? {
+    func shareRecord(_ record: CKRecord)->UICloudSharingController? {
         guard let av = assuredFromOptional() else { return nil }
         if record.share != nil {
             // Already shared
@@ -601,5 +630,143 @@ class CloudKitConnector: AssuredState {
             print(error)
         }
         CKContainer(identifier: shareMetaData.containerIdentifier).add(accept)
+    }
+    
+    /**
+     Remove a single non-owning participant.
+    */
+    func removeParticipant(record:CKRecord, scope: CKDatabase.Scope, completion: (([CKRecord]?,Error?)->())? ) {
+        // fetch the share record
+        guard let share = record.share else { completion?(nil, CloudKitConnectorError.recordNotShared) ; return }
+        loadRecord(share.recordID, scope: scope) { [weak self] (record, error) in
+            if let error = error {
+                completion?(nil,error)
+            } else {
+                let shareRecord = record as! CKShare
+                guard let record = record else { completion?(nil, WabblerGameSessionError.unknown) ; return }
+                if shareRecord.participants.count < 2 {
+                    completion?(nil, CloudKitConnectorError.recordNotShared)
+                }
+                if let nonOwner = shareRecord.participants.first(where: { $0 != shareRecord.owner }) {
+                    if nonOwner.acceptanceStatus == .removed {
+                        completion?(nil, CloudKitConnectorError.recordNotShared)
+                        return
+                    }
+                    shareRecord.removeParticipant(nonOwner)
+                } else {
+                    completion?(nil, CloudKitConnectorError.recordNotShared)
+                    return
+                }
+                self?.modify(records: [record,shareRecord], recordID: shareRecord.recordID, scope: scope, saveCompletion: { (records, error) in
+                    if let error = error {
+                        completion?(records, error)
+                    } else {
+                        completion?(records, nil)
+                    }
+                }, deleteCompletion: nil)
+            }
+        }
+    }
+}
+
+
+@objc class ConnectorStoredChangeToken: NSObject, NSSecureCoding {
+    var serverChangeToken: CKServerChangeToken?
+    var database: String?
+    static var supportsSecureCoding: Bool {
+        return false
+    }
+    
+    func encode(with aCoder: NSCoder) {
+        aCoder.encode(serverChangeToken, forKey: "serverChangeToken")
+        aCoder.encode(database, forKey:"database")
+    }
+    
+    required init?(coder aDecoder: NSCoder) {
+        guard let changeToken = aDecoder.decodeObject(forKey: "serverChangeToken") as? CKServerChangeToken else { return nil }
+        guard let database = aDecoder.decodeObject(forKey: "database") as? String else { return nil }
+        self.serverChangeToken = changeToken
+        self.database = database
+    }
+    
+    override init() {
+        super.init()
+    }
+}
+
+@objc class ConnectorStoredZoneChangeTokens: NSObject, NSSecureCoding {
+    var zoneChangeTokens: [CKRecordZone.ID : CKServerChangeToken]?
+    static var supportsSecureCoding: Bool {
+        return false
+    }
+    
+    func encode(with aCoder: NSCoder) {
+        aCoder.encode(zoneChangeTokens, forKey: "serverChangeToken")
+    }
+    
+    required init?(coder aDecoder: NSCoder) {
+        guard let changeTokens = aDecoder.decodeObject(forKey: "serverChangeToken") as? Dictionary<CKRecordZone.ID,CKServerChangeToken> else { return nil }
+        self.zoneChangeTokens = changeTokens
+    }
+    
+    override init() {
+        super.init()
+    }
+}
+
+extension CloudKitConnector {
+    static func cacheServerChangeToken(_ token: CKServerChangeToken, scope: CKDatabase.Scope) throws {
+        var fileName: String
+        switch scope {
+        case .private:
+            fileName = "privateDBChangeToken"
+        case .shared:
+            fileName = "sharedDBChangeToken"
+        default:
+            throw WabblerGameSessionError.cacheFailure
+        }
+        try Storage.storeNSObj(token, to: .documentsNoBackup, as: fileName)
+    }
+    
+    static func retreiveSrverChangeToken(scope: CKDatabase.Scope) throws -> CKServerChangeToken {
+        do {
+            var fileName: String
+            switch scope {
+            case .private:
+                fileName = "privateDBChangeToken"
+            case .shared:
+                fileName = "sharedDBChangeToken"
+            default:
+                throw WabblerGameSessionError.cacheFailure
+            }
+            let token = try Storage.retrieveNSObj(fileName, from: .documentsNoBackup, as: CKServerChangeToken.self)
+            return token
+        } catch {
+            throw WabblerGameSessionError.cacheFailure
+        }
+    }
+    
+    static func cacheZoneChangeTokens(_ tokens: [CKRecordZone.ID: CKServerChangeToken]) throws {
+        let cachable = ConnectorStoredZoneChangeTokens()
+        cachable.zoneChangeTokens = tokens
+        try Storage.storeNSObj(cachable, to: .documentsNoBackup, as: "zoneChangeTokens")
+    }
+    
+    static func retreiveZoneChangeTokens() ->  [CKRecordZone.ID: CKServerChangeToken]? {
+        do {
+            let arch = try Storage.retrieveNSObj("zoneChangeTokens", from: .documentsNoBackup, as: ConnectorStoredZoneChangeTokens.self)
+            return arch.zoneChangeTokens
+        } catch {
+            return nil
+        }
+    }
+    
+    @discardableResult static func removeLocalRecord(fileName: String) -> Bool? {
+        do {
+            let success = try Storage.remove(fileName, from: .documentsNoBackup)
+            return success
+        } catch {
+            return nil
+        }
     }
 }
