@@ -9,6 +9,7 @@
 import UIKit
 import CloudKit
 import MessageUI
+import WabblerGameKit
 
 extension ViewController: MFMessageComposeViewControllerDelegate {
     func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {

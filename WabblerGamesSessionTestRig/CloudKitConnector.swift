@@ -11,14 +11,14 @@ import CloudKit
 import UIKit
 
 
-protocol AssuredValues { } // All values on conforming type must be non-optional for conforming types
-protocol AssuredState {
+public protocol AssuredValues { } // All values on conforming type must be non-optional for conforming types
+public protocol AssuredState {
     associatedtype AssuredValueType: AssuredValues
     var stateError: ((Error?)->Void)? { get set }
     func assuredFromOptional()->AssuredValueType? // Ensure implementation calls stateError if assurance cannot be provided
 }
 
-struct AssuredConnectionValues: AssuredValues {
+public struct AssuredConnectionValues: AssuredValues {
     let container: CKContainer
     let privateSubscription: CKSubscription
     let privateDatabase: CKDatabase
@@ -36,7 +36,7 @@ enum CloudKitConnectorStrings {
  connecting and / or if there is a problem getting
  assured values.
  */
-enum CloudKitConnectorError: Error {
+public enum CloudKitConnectorError: Error {
     case signInRequired
     case accountRestricted
     case couldNotDetermineAccountStatus
@@ -66,7 +66,7 @@ enum DatabaseVisibility {
 class CloudKitConnector: AssuredState {
     typealias OptionalValueType = CloudKitConnector
     typealias AssuredValueType = AssuredConnectionValues
-    static let sharedConnector = CloudKitConnector()
+    public static let sharedConnector = CloudKitConnector()
     private init() { }
     var stateError: ((Error?)->Void)?
     // Assured optionals

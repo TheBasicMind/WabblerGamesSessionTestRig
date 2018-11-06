@@ -18,7 +18,7 @@ enum WabblerCloudPlayerStrings {
     static let displayName                    = "displayName"
 }
 
-enum WabblerGameSessionError: Error {
+public enum WabblerGameSessionError: Error {
     case cloudKitConnectionInitialisationFailed
     case localPlayerNotSignedIn // CKError.Code.notAuthenticated
     case unknown
@@ -30,10 +30,10 @@ enum WabblerGameSessionError: Error {
     case cloudDriveDisabled // User not logged into iCloud or iCloud account restricted
 }
 
-struct WabblerCloudPlayer: Codable, Hashable, Equatable {
-    var displayName: String?
-    var playerID: String?
-    var modificationDate: Date?
+public struct WabblerCloudPlayer: Codable, Hashable, Equatable {
+    public var displayName: String?
+    public var playerID: String?
+    public var modificationDate: Date?
     
     /**
      Note uses the same container as
@@ -43,7 +43,7 @@ struct WabblerCloudPlayer: Codable, Hashable, Equatable {
      If the returned error is CKError.Code.notAuthenticated
      the user is not logged in, or his account is restricted.
     */
-    static func getCurrentSignedInPlayer(completionHandler handler: @escaping (WabblerCloudPlayer?, Error?) -> Void) {
+    public static func getCurrentSignedInPlayer(completionHandler handler: @escaping (WabblerCloudPlayer?, Error?) -> Void) {
         if let localPlayer = WabblerGameSession.localPlayer {
             handler(localPlayer, nil)
         } else {
@@ -67,7 +67,7 @@ struct WabblerCloudPlayer: Codable, Hashable, Equatable {
     }
 }
 
-protocol WabblerGameSessionEventListener {
+public protocol WabblerGameSessionEventListener {
     /**
      When called, the session record has the local player added but has not yet been saved back to the server
     */
@@ -87,12 +87,12 @@ protocol WabblerGameSessionEventListener {
  application decision.
  */
 
-class WabblerGameSession {
-    typealias ID = String
-    static func == (lhs: WabblerGameSession, rhs: WabblerGameSession) -> Bool { return true }
-    static var stateError: ((Error?) -> Void)?
-    var stateError: ((Error) -> Void)?
-    static var localPlayer: WabblerCloudPlayer? {
+public class WabblerGameSession {
+    public typealias ID = String
+    public static func == (lhs: WabblerGameSession, rhs: WabblerGameSession) -> Bool { return true }
+    public static var stateError: ((Error?) -> Void)?
+    //public var stateError: ((Error) -> Void)?
+    public static var localPlayer: WabblerCloudPlayer? {
         if let playerRecord = localPlayerRecord {
             return WabblerCloudPlayer(displayName: playerRecord[WabblerCloudPlayerStrings.displayName] ?? WabblerGameSession.localPlayerDisplayName ?? "Name not defined", playerID: playerRecord.recordID.recordName, modificationDate: playerRecord.modificationDate)
         }
@@ -111,8 +111,8 @@ class WabblerGameSession {
     fileprivate static let keys = (players: "players", title : "title", cachedData: "cachedData", owner: "owner", opponent: "opponent")
     private static var eventListenerDelegate: WabblerGameSessionEventListener?
     private var record : CKRecord //
-    let scope: CKDatabase.Scope
-    var owner: WabblerCloudPlayer? {
+    public let scope: CKDatabase.Scope
+    public var owner: WabblerCloudPlayer? {
         get {
             var player: WabblerCloudPlayer? = nil
             if let data = self.record[WabblerGameSession.keys.owner] as? NSData {
@@ -136,7 +136,7 @@ class WabblerGameSession {
             record[WabblerGameSession.keys.owner] = data as NSData
         }
     }
-    var opponent: WabblerCloudPlayer? {
+    public var opponent: WabblerCloudPlayer? {
         get {
             var player: WabblerCloudPlayer? = nil
             if let data = self.record[WabblerGameSession.keys.opponent] as? NSData {
@@ -160,22 +160,22 @@ class WabblerGameSession {
             record[WabblerGameSession.keys.opponent] = data as NSData
         }
     }
-    var identifier : String {
+    public var identifier : String {
         get {
             return record.recordID.recordName
         }
     }
-    var creationDate: Date? {
+    public var creationDate: Date? {
         get {
             return record.creationDate
         }
     }
-    var lastModifiedDate : Date? {
+    public var lastModifiedDate : Date? {
         get {
             return record.modificationDate
         }
     }
-    var players: [WabblerCloudPlayer] {
+    public var players: [WabblerCloudPlayer] {
         var players = [WabblerCloudPlayer]()
         if let owner = owner {
             players += [owner]
@@ -185,7 +185,7 @@ class WabblerGameSession {
         }
         return players
     }
-    var title : String {
+    public var title : String {
         get {
             return record[WabblerGameSession.keys.title] as! String
         }
@@ -194,13 +194,17 @@ class WabblerGameSession {
         }
     }
     
+    public static func acceptShare(shareMetaData:CKShare.Metadata) {
+        CloudKitConnector.sharedConnector.acceptShare(shareMetaData: shareMetaData)
+    }
+    
     /**
      Returns nil if game session is not assured
      The cloud kit connector also needs to be assured.
      Returns the CloudKitConnector assured values if
      successful.
     */
-    static func assuredFromOptional()-> AssuredConnectionValues? {
+    public static func assuredFromOptional()-> AssuredConnectionValues? {
         let assuredValues = CloudKitConnector.sharedConnector.assuredFromOptional()
         if WabblerGameSession.localPlayer != nil, assuredValues != nil {
             return assuredValues
@@ -235,7 +239,7 @@ class WabblerGameSession {
      The local player name should
      be set before cloudkit is initialised
     */
-    static func initialiseCloudKitConnection(localPlayerName: String) {
+    public static func initialiseCloudKitConnection(localPlayerName: String) {
         WabblerGameSession.localPlayerDisplayName = localPlayerName
         CloudKitConnector.sharedConnector.stateError = {
             error in
@@ -252,7 +256,7 @@ class WabblerGameSession {
     /**
      Returns the WabblerGameSession as stored on the server
     */
-    static func createSession(withTitle title: String, completionHandler: @escaping (WabblerGameSession?, Error?) -> Void) {
+    public static func createSession(withTitle title: String, completionHandler: @escaping (WabblerGameSession?, Error?) -> Void) {
         guard WabblerGameSession.assuredFromOptional() != nil else { return }
         var newSession: WabblerGameSession?
         do {
@@ -288,7 +292,7 @@ class WabblerGameSession {
         }
     }
     
-    static func cachedSessions() -> [WabblerGameSession] {
+    public static func cachedSessions() -> [WabblerGameSession] {
         var sessions = [WabblerGameSession]()
         if let records = WabblerGameSession.cachedRecords() {
             for record in records {
@@ -303,7 +307,7 @@ class WabblerGameSession {
      check for any session deletions by comparing
      with any existing array / list of sessions.
      */
-    static func loadSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
+    public static func loadSessions(completionHandler: @escaping ([WabblerGameSession]?, Error?) -> Void) {
         guard CloudKitConnector.sharedConnector.assuredFromOptional() != nil else { return }
         CloudKitConnector.sharedConnector.fetchRecords() {
             records, error in
@@ -359,7 +363,7 @@ class WabblerGameSession {
         - error: A passthrough CloudKit error object if an error was raised.
     */
     ///TODO: Retry after seconds
-    private func save(_ data: Data, completionHandler:((Data?, Error?) -> Void)?) {
+    public func save(_ data: Data, completionHandler:((Data?, Error?) -> Void)?) {
         let modifiedRecord = record.copy() as! CKRecord // We make a copy and avoid modifying this session un
         modifiedRecord[WabblerGameSession.keys.cachedData] = data
         let scope = self.scope
@@ -402,7 +406,7 @@ class WabblerGameSession {
      Load game data from the local cache
      record locally.
      */
-    func loadCachedData(completion: ((Data?, Error?) -> Void)? ) {
+    public func loadCachedData(completion: ((Data?, Error?) -> Void)? ) {
         let record = WabblerGameSession.cachedRecord(fileName: self.record.recordID.recordName)
         completion?(record?.0[WabblerGameSession.keys.cachedData] as? Data, nil)
         //        CloudKitConnector.sharedConnector.loadRecord(record.recordID, scope: scope) { record, error in
@@ -458,7 +462,7 @@ class WabblerGameSession {
     }
      */
     
-    static func add(listener: WabblerGameSessionEventListener) {
+    public static func add(listener: WabblerGameSessionEventListener) {
         WabblerGameSession.eventListenerDelegate = listener
     }
     
@@ -466,7 +470,7 @@ class WabblerGameSession {
      Call when a CKDatabaseSubscription based push notication
      has been received.
     */
-    static func updateForChanges(databaseScope:CKDatabase.Scope, completion: ((Bool)->Void )? ) {
+    public static func updateForChanges(databaseScope:CKDatabase.Scope, completion: ((Bool)->Void )? ) {
         guard let delegate = WabblerGameSession.eventListenerDelegate else { return }
         guard WabblerGameSession.assuredFromOptional() != nil else { return }
         CloudKitConnector.sharedConnector.fetchLatestChanges(databaseScope: databaseScope) { (records, deletions, all, error) in
@@ -521,7 +525,7 @@ class WabblerGameSession {
         }
     }
     
-    func remove(completionHandler: @escaping (Error?) -> Void) {
+    public func remove(completionHandler: @escaping (Error?) -> Void) {
         CloudKitConnector.sharedConnector.delete(recordID: record.recordID) { (recordID, error) in
             DispatchQueue.main.async {
                 completionHandler(error)
@@ -529,11 +533,11 @@ class WabblerGameSession {
         }
     }
     
-    func shareSession()->UICloudSharingController? {
+    public func shareSession()->UICloudSharingController? {
         return CloudKitConnector.sharedConnector.shareRecord(record)
     }
     
-    func removeParticipant(completion: ((Bool,Error?)->())?) {
+    public func removeParticipant(completion: ((Bool,Error?)->())?) {
         if record.share != nil {
             CloudKitConnector.sharedConnector.removeParticipant(record: record, scope: scope) { (records, error) in
                 completion?(records != nil && error == nil, error)
@@ -543,7 +547,7 @@ class WabblerGameSession {
 }
 
 extension WabblerGameSession: Hashable {
-    func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         hasher.combine(record.recordID)
     }
 }
@@ -574,7 +578,7 @@ extension WabblerGameSession: Hashable {
 
 // Local Caching
 
-extension WabblerGameSession {
+public extension WabblerGameSession {
     static func cacheRecord(_ record: CKRecord, scope: CKDatabase.Scope) throws {
         let cachable = WabblerGameSessionArch()
         var database: String

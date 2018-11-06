@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import WabblerGameKit
 
 extension WabblerGameSession {
     /**
@@ -51,7 +52,7 @@ extension WabblerGameSession {
     }
     
     func loadGameData(completionHandler: @escaping (GameData?, Error?) -> Void) {
-        loadData { (data, anError) in
+        loadCachedData { (data, anError) in
             var anError = anError
             let decoder = JSONDecoder()
             var gameData: GameData? = nil

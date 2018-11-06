@@ -9,6 +9,7 @@
 import UIKit
 import CloudKit
 import UserNotifications
+import WabblerGameKit
 
 class TestRigUbiquityStore {
     static var ubiquityStore: NSUbiquitousKeyValueStore! = NSUbiquitousKeyValueStore()
@@ -116,7 +117,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
     
     func application(_ application: UIApplication, userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata) {
-        CloudKitConnector.sharedConnector.acceptShare(shareMetaData: cloudKitShareMetadata)
+        WabblerGameSession.acceptShare(shareMetaData: cloudKitShareMetadata)
     }
 
 
