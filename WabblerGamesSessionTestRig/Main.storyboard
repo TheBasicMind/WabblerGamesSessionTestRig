@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14313.18" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14460.31" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
     <device id="retina4_7" orientation="portrait">
         <adaptation id="fullscreen"/>
     </device>
     <dependencies>
-        <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14283.14"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14460.20"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -105,25 +104,25 @@
                                             <action selector="deleteSessions:" destination="BYZ-38-t0r" eventType="touchUpInside" id="3in-ck-oKb"/>
                                         </connections>
                                     </button>
-                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="RUr-7L-gNU">
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="7rF-ea-ryF">
                                         <rect key="frame" x="0.0" y="380" width="340" height="30"/>
-                                        <state key="normal" title="Manually Join Game"/>
+                                        <state key="normal" title="get cached by ID"/>
                                         <connections>
-                                            <action selector="manuallyJoin:" destination="BYZ-38-t0r" eventType="touchUpInside" id="5Si-ft-UnS"/>
+                                            <action selector="getCachedRecordByID:" destination="BYZ-38-t0r" eventType="touchUpInside" id="TlO-fK-v2H"/>
                                         </connections>
                                     </button>
-                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="5fC-4j-4nW">
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ewm-Oh-VSi">
                                         <rect key="frame" x="0.0" y="410" width="340" height="30"/>
-                                        <state key="normal" title="Message Opponent"/>
+                                        <state key="normal" title="list all cached"/>
                                         <connections>
-                                            <action selector="messageOpponent:" destination="BYZ-38-t0r" eventType="touchUpInside" id="XHF-yO-zXz"/>
+                                            <action selector="listCachedSessions:" destination="BYZ-38-t0r" eventType="touchUpInside" id="luL-gT-WYR"/>
                                         </connections>
                                     </button>
-                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="OJ8-3q-eIj">
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="EVN-WF-ZjJ">
                                         <rect key="frame" x="0.0" y="440" width="340" height="30"/>
-                                        <state key="normal" title="Clear Badge"/>
+                                        <state key="normal" title="remove cached by ID"/>
                                         <connections>
-                                            <action selector="clearBadge:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Zm3-pl-te8"/>
+                                            <action selector="removeCachedByID:" destination="BYZ-38-t0r" eventType="touchUpInside" id="mLo-5U-fzj"/>
                                         </connections>
                                     </button>
                                     <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" keyboardDismissMode="onDrag" textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="q34-ji-b1I">
@@ -151,7 +150,6 @@
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                     </view>
                     <connections>
-                        <outlet property="manuallyJoinGameButton" destination="RUr-7L-gNU" id="Cxu-oZ-Q2e"/>
                         <outlet property="textView" destination="q34-ji-b1I" id="e2w-Hl-LCQ"/>
                     </connections>
                 </viewController>

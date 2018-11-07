@@ -23,6 +23,8 @@
 		09D2CA472174A08E00AD11E2 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 09D2CA462174A08100AD11E2 /* Main.storyboard */; };
 		09D2CA492174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D2CA482174A11A00AD11E2 /* MiscExtensionsFunctionsConstants.swift */; };
 		09D2CA512176278700AD11E2 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09D2CA502176278700AD11E2 /* CloudKit.framework */; };
+		09E246272191D58A00904318 /* WabblerGameKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09CBF3422191B69900467C3A /* WabblerGameKit.framework */; };
+		09E246282191D58A00904318 /* WabblerGameKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 09CBF3422191B69900467C3A /* WabblerGameKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +65,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				09E246282191D58A00904318 /* WabblerGameKit.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -117,6 +120,7 @@
 			files = (
 				09CBF3662191BAE300467C3A /* WabblerGameKit.framework in Frameworks */,
 				09D2CA512176278700AD11E2 /* CloudKit.framework in Frameworks */,
+				09E246272191D58A00904318 /* WabblerGameKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -683,6 +687,7 @@
 		09D2CA41217496AA00AD11E2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = WabblerGamesSessionTestRig/WabblerGamesSessionTestRig.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -703,6 +708,7 @@
 		09D2CA42217496AA00AD11E2 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = WabblerGamesSessionTestRig/WabblerGamesSessionTestRig.entitlements;
 				CODE_SIGN_STYLE = Automatic;

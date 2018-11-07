@@ -378,6 +378,11 @@ class CloudKitConnector: AssuredState {
             [weak self] newToken, more, error in
             if let error = error {
                 completion([],[], changeToken == nil ,error)
+            } else if changedZones.count == 0 {
+                // fetching zero changed records raises an error
+                // which we do not want to do if we already know
+                // there are no changes. So we return here. 
+                completion([],[], changeToken == nil ,error)
             } else {
                 self?.fetchZoneChanges(database: database, serverChangeToken: changeToken, zones: changedZones, completion: completion) // using CKFetchRecordZoneChangesOperation
             }
@@ -558,7 +563,7 @@ class CloudKitConnector: AssuredState {
                     // Even though no error, still an unknown error has occured because
                     // otherwise we would have nulified this completion block in the previous
                     // block
-                    saveCompletion(modifiedRecords,  CloudKitConnectorError.unknown)
+                    saveCompletion(modifiedRecords,  error)
                 }
                 if let deleteCompletion = deleteCompletion {
                     if let recordID = recordIDs?.first {

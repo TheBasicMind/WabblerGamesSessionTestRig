@@ -117,6 +117,9 @@ class ViewController: UIViewController {
                         }
                     }
                 }
+                if gameSession.shouldSaveForPlayerJoined() {
+                    gameSession.save(completionHandler: <#T##((WabblerGameSession?, Error?) -> Void)?##((WabblerGameSession?, Error?) -> Void)?##(WabblerGameSession?, Error?) -> Void#>)
+                }
             }
         }
     }
@@ -195,7 +198,7 @@ class ViewController: UIViewController {
     }
     
     @IBAction func loadDataForSession(_ sender: Any) {
-        session?.loadGameData  {
+        session?.loadGameData()  {
             [weak self] (gameData, error) in
             if let error = error as? WabblerGameSessionError {
                 self?.printError(error)
@@ -246,10 +249,45 @@ class ViewController: UIViewController {
         
     }
     
-    @IBAction func manuallyJoin(_ sender: Any) {
-//        if let delegate = UIApplication.shared.delegate as? AppDelegate {
-//            //delegate.joinGame()
-//        }
+    @IBAction func getCachedRecordByID(_ sender: Any) {
+        if let recordID = session?.identifier {
+            let record = WabblerGameSession.cachedRecord(fileName: recordID)
+            if let record = record {
+                myDebugPrint("cachedRedcord ID = \(record.0.recordID.recordName)")
+                myDebugPrint("cachedRedcord database scope = \(record.1)")
+            }
+        }
+    }
+    
+    @IBAction func listCachedSessions(_ sender: Any) {
+        let cachedSessions = WabblerGameSession.cachedSessions()
+
+        myDebugPrint("******** Got sessions, count = \(cachedSessions.count ?? 0)")
+        
+        for gameSession in cachedSessions {
+            logSession(gameSession)
+            gameSession.loadGameData()  {
+                [weak self] (gameData, error) in
+                if let error = error as? WabblerGameSessionError {
+                    self?.printError(error)
+                } else {
+                    if let gameData = gameData {
+                        myDebugPrint("    ******** Got data for session, \(gameData.someString)")
+                        self?.sessionsAndData[gameSession] = gameData
+                    }
+                }
+            }
+        }
+    }
+    
+    @IBAction func removeCachedByID(_ sender: Any) {
+        if let recordID = session?.identifier {
+            if let removed = WabblerGameSession.removeCachedRecord(fileName: recordID) {
+                print("Record with ID removed = \(removed)")
+            } else {
+                print("Did not remove record")
+            }
+        }
     }
     
     @IBAction func messageOpponent(_ sender: Any) {
@@ -285,11 +323,22 @@ class ViewController: UIViewController {
 }
 
 extension ViewController: WabblerGameSessionEventListener {
+    func joinedSession(_ session: WabblerGameSession, withPlayer player: WabblerCloudPlayer) {
+        myDebugPrint("###### Joined session with identifier: \(session.identifier), created by player \(player.displayName ?? "Nil" ) with identifier \(player.playerID ?? "Nil")")
+        session.save { (savedSession, error) in
+            if let savedSession = savedSession {
+                myDebugPrint("###### Saved session to save local player details \(savedSession.opponent?.displayName ?? "Nil") with identifier \(player.playerID ?? "Nil")")
+            } else if let error = error {
+                myDebugPrint("###### Error saving session after joining")
+                myDebugPrint(error.localizedDescription)
+            }
+        }
+    }
+    
     func sessionWasDeleted(withIdentifier identifier: WabblerGameSession.ID) {
         //self.session = session
         myDebugPrint("###### Session with identifier: \(identifier), was deleted.")
     }
-    
     
     public func session(_ session: WabblerGameSession, didRemove player: WabblerCloudPlayer) {
         //self.session = session

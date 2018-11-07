@@ -71,6 +71,7 @@ public protocol WabblerGameSessionEventListener {
     /**
      When called, the session record has the local player added but has not yet been saved back to the server
     */
+    func joinedSession(_ session: WabblerGameSession, withPlayer: WabblerCloudPlayer)
     func session(_ session: WabblerGameSession, player: WabblerCloudPlayer, didSave data: Data)
     func sessionWasDeleted(withIdentifier: WabblerGameSession.ID)
     func session(_ session: WabblerGameSession, didRemove player: WabblerCloudPlayer)
@@ -240,6 +241,11 @@ public class WabblerGameSession {
      be set before cloudkit is initialised
     */
     public static func initialiseCloudKitConnection(localPlayerName: String) {
+        do {
+            _ = try Storage.getURL(for: Storage.Directory.documentsNoBackup, fileName: nil)
+        } catch {
+            WabblerGameSession.stateError?(error)
+        }
         WabblerGameSession.localPlayerDisplayName = localPlayerName
         CloudKitConnector.sharedConnector.stateError = {
             error in
@@ -364,24 +370,41 @@ public class WabblerGameSession {
     */
     ///TODO: Retry after seconds
     public func save(_ data: Data, completionHandler:((Data?, Error?) -> Void)?) {
-        let modifiedRecord = record.copy() as! CKRecord // We make a copy and avoid modifying this session un
-        modifiedRecord[WabblerGameSession.keys.cachedData] = data
+        record[WabblerGameSession.keys.cachedData] = data
+        save { (session, error) in
+            let saveData = session?.record[WabblerGameSession.keys.cachedData] as? Data
+            completionHandler?(saveData,error)
+        }
+    }
+    
+    /**
+     Save data to the session record.
+     The completion handler returns the data we attempted to save
+     or an error. This method is kept private because for efficiency
+     the completion handler does not return on the main thread.
+     If the save is successful this method caches the newly saved record locally.
+     - parameter data: The data we are saving to the record.
+     - parameter completionHandler: A completion handler closure.
+     - data: The data now saved on the server
+     - error: A passthrough CloudKit error object if an error was raised.
+     */
+    ///TODO: Retry after seconds
+    public func save(completionHandler:((WabblerGameSession?, Error?) -> Void)?) {
         let scope = self.scope
-        
-        CloudKitConnector.sharedConnector.save(record: modifiedRecord, scope: scope) { (records, error) in
-            var dataToBeReturned: Data? = nil
-
+        CloudKitConnector.sharedConnector.save(record: record, scope: scope) { (records, error) in
+            
             // If there is an error we extract
             // the data as saved on the server
             if let ckError = error as? CKError {
                 switch ckError.code {
                 default:
                     if let updatedRecord = ckError.serverRecord {
-                        self.record = updatedRecord
-                        dataToBeReturned = updatedRecord[WabblerGameSession.keys.cachedData] as? Data
-                        completionHandler?(dataToBeReturned, error)
-                        return
+                        let serverSession = WabblerGameSession(record: updatedRecord, scope: scope)
+                        completionHandler?(serverSession, error)
+                    } else {
+                        completionHandler?(nil, error)
                     }
+                    return
                 }
             } else if let error = error {
                 // Some other error we weren't expecting
@@ -390,15 +413,18 @@ public class WabblerGameSession {
                 completionHandler?(nil,error)
                 return
             } else if let savedRecord = records?.first {
-                self.record = savedRecord
+                let savedSession = WabblerGameSession(record: savedRecord, scope: scope)
                 do {
                     try WabblerGameSession.cacheRecord(savedRecord, scope: scope)
                 } catch {
                     completionHandler?(nil, error)
                     return
                 }
+                completionHandler?(savedSession, error)
+            } else {
+                // Should not ever be encountered
+                completionHandler?(nil, nil)
             }
-            completionHandler?(data, error)
         }
     }
     
@@ -494,10 +520,20 @@ public class WabblerGameSession {
                         if record.0.lastModifiedUserRecordID == WabblerGameSession.localPlayerRecord!.recordID {
                             player = WabblerGameSession.localPlayer!
                         } else {
+                            player = gameSession.remotePlayer
                             if gameSession.opponent == nil, record.1 == .shared {
                                 gameSession.opponent = localPlayer
+                                DispatchQueue.main.async {
+                                    if let player = player {
+                                        delegate.joinedSession(gameSession, withPlayer: player)
+                                    } else {
+                                        print("Error: Player for record was nil")
+                                        print(record.0)
+                                    }
+                                }
+                                completion?(true)
+                                return
                             }
-                            player = gameSession.remotePlayer
                         }
                         guard let data = record.0[WabblerGameSession.keys.cachedData] as? Data else { return }
                         DispatchQueue.main.async {
@@ -515,7 +551,7 @@ public class WabblerGameSession {
                 }
                 for deletion in deletions {
                     let sessionID = deletion.0.recordName
-                    WabblerGameSession.removeLocalRecord(fileName: sessionID)
+                    WabblerGameSession.removeCachedRecord(fileName: sessionID)
                     DispatchQueue.main.async {
                         WabblerGameSession.eventListenerDelegate?.sessionWasDeleted(withIdentifier: sessionID)
                     }
@@ -527,6 +563,9 @@ public class WabblerGameSession {
     
     public func remove(completionHandler: @escaping (Error?) -> Void) {
         CloudKitConnector.sharedConnector.delete(recordID: record.recordID) { (recordID, error) in
+            if error == nil, let recordID = recordID {
+                WabblerGameSession.removeCachedRecord(fileName: recordID.recordName)
+            }
             DispatchQueue.main.async {
                 completionHandler(error)
             }
@@ -544,6 +583,19 @@ public class WabblerGameSession {
             }
         }
     }
+    
+    /**
+     If the opponent field has been updated
+     this will return true. The opponent field
+     is updated when the opponent adds player
+     details to the session. This method provides
+     a means to check if the session should be
+     resaved, so the opponent is informed the
+     player has joined the game.
+    */
+    public func shouldSaveForPlayerJoined()->Bool {
+        return record.changedKeys().contains(WabblerGameSession.keys.opponent)
+    }
 }
 
 extension WabblerGameSession: Hashable {
@@ -552,7 +604,8 @@ extension WabblerGameSession: Hashable {
     }
 }
 
-@objc class WabblerGameSessionArch: NSObject, NSSecureCoding {
+@objc(WabblerGameSessionArch)
+class WabblerGameSessionArch: NSObject, NSSecureCoding {
     var record: CKRecord?
     var database: String?
     static var supportsSecureCoding: Bool {
@@ -616,7 +669,7 @@ public extension WabblerGameSession {
     static func cachedRecords() -> [(CKRecord, CKDatabase.Scope)]? {
         let arch: [WabblerGameSessionArch]
         do {
-            arch = try Storage.retrieveAllNSObj(.documentsNoBackup, of: WabblerGameSessionArch.self)
+            arch = try Storage.retreiveAllNSObjOfType(WabblerGameSessionArch.self)
         } catch {
             return nil
         }
@@ -637,7 +690,7 @@ public extension WabblerGameSession {
     }
     
     
-    @discardableResult static func removeLocalRecord(fileName: String) -> Bool? {
+    @discardableResult static func removeCachedRecord(fileName: String) -> Bool? {
         do {
             let success = try Storage.remove(fileName, from: .documentsNoBackup)
             return success
